@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+.venv/
+venv/
+
+# Output & logs (本地爬取结果，不入库)
+output/
+logs/
+
+# Secrets
+.env
+*.key
+
+# macOS
+.DS_Store

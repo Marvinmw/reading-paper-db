@@ -1,0 +1,2092 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>论文浏览器</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;background:#f0f2f5;color:#1a1a2e}
+
+/* ── App shell ── */
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* ── Top bar ── */
+.topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 14px;
+  background:#0d1117;color:#c9d1d9;border-bottom:1px solid #21262d;flex-shrink:0}
+.logo{font-size:15px;font-weight:700;color:#58a6ff;white-space:nowrap}
+
+/* Tab buttons in topbar */
+.tab-btn{padding:4px 14px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;
+  border:1px solid #30363d;background:transparent;color:#8b949e;transition:all .15s;white-space:nowrap}
+.tab-btn.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
+.tab-btn:not(.active):hover{background:#21262d;color:#c9d1d9}
+
+.topbar-sep{color:#30363d;font-size:16px}
+.topbar select,.topbar input[type=text],.topbar input[type=date]{background:#161b22;color:#c9d1d9;border:1px solid #30363d;
+  padding:5px 9px;border-radius:6px;font-size:12px;outline:none}
+.topbar input[type=date]{width:128px;color-scheme:dark}
+.topbar select{cursor:pointer}
+.topbar select:focus,.topbar input:focus{border-color:#58a6ff}
+.topbar input::placeholder{color:#484f58}
+#searchInput{width:190px}
+#apiKeyInput{width:210px;font-family:monospace;letter-spacing:.03em}
+
+.source-chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{padding:3px 9px;border-radius:10px;font-size:11px;cursor:pointer;border:1px solid transparent;
+  color:#fff;font-weight:600;user-select:none;transition:opacity .15s}
+.chip.off{opacity:.28}
+
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.count-pill{background:#161b22;border:1px solid #30363d;padding:3px 10px;
+  border-radius:10px;font-size:12px;color:#8b949e;white-space:nowrap}
+
+/* ── Main area ── */
+.main{display:flex;flex:1;overflow:hidden}
+
+/* ── Left content panel (papers or report) ── */
+.content-panel{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.view{display:none;flex:1;overflow:hidden}
+.view.active{display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Papers view ── */
+#view-papers{flex-direction:column}
+.papers-scroll{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.papers-scroll::-webkit-scrollbar{width:5px}
+.papers-scroll::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+
+/* ── Paper card ── */
+.card{background:#fff;border-radius:8px;padding:12px 15px;
+  box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:3px solid #ddd;transition:box-shadow .15s}
+.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.card-meta{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.sbadge{font-size:10px;padding:2px 7px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0}
+.card-date{font-size:11px;color:#aaa;margin-left:auto}
+.card-title{display:block;font-size:14px;font-weight:600;color:#0d1117;line-height:1.45;
+  margin-bottom:4px;text-decoration:none}
+.card-title:hover{color:#0969da;text-decoration:underline}
+.card-authors{font-size:11px;color:#888;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-abstract{font-size:12px;color:#555;line-height:1.65;margin-bottom:7px}
+.card-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.btn-sm{font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid #d0d7de;
+  background:#f6f8fa;color:#57606a;text-decoration:none;cursor:pointer;transition:all .12s;white-space:nowrap}
+.btn-sm:hover{background:#eaeef2}
+.btn-ai{margin-left:auto;font-size:11px;padding:3px 12px;border-radius:5px;border:none;
+  background:#0969da;color:#fff;cursor:pointer;transition:background .12s;white-space:nowrap}
+.btn-ai:hover{background:#0550ae}
+.btn-ai:disabled{background:#90caf9;cursor:default}
+.btn-expand{font-size:11px;color:#0969da;background:none;border:none;cursor:pointer;padding:0}
+.btn-expand:hover{text-decoration:underline}
+.ai-sum{display:none;margin-top:9px;padding:9px 12px;background:#f0f7ff;
+  border-left:3px solid #0969da;border-radius:0 5px 5px 0;font-size:12px;color:#1a1a2e;line-height:1.75}
+.ai-sum.visible{display:block}
+.ai-sum-label{font-size:10px;color:#0969da;font-weight:700;margin-bottom:3px}
+
+.empty-state{margin:50px auto;text-align:center;color:#8b949e;font-size:14px}
+.empty-state .eicon{font-size:32px;margin-bottom:8px}
+
+/* ── Report view ── */
+#view-report{flex-direction:column}
+.report-scroll{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:18px}
+.report-scroll::-webkit-scrollbar{width:5px}
+.report-scroll::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+
+/* Report toolbar */
+.report-toolbar{display:flex;align-items:center;gap:8px;flex-shrink:0;padding:8px 16px 0}
+.refresh-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid #d0d7de;
+  background:#f6f8fa;color:#57606a;cursor:pointer;transition:all .12s}
+.refresh-btn:hover{background:#eaeef2}
+/* Segmented control */
+.seg-ctrl{display:flex;border:1px solid #d0d7de;border-radius:6px;overflow:hidden;flex-shrink:0}
+.seg-btn{padding:5px 14px;font-size:12px;border:none;border-right:1px solid #d0d7de;
+  background:#f6f8fa;color:#57606a;cursor:pointer;transition:background .12s;white-space:nowrap}
+.seg-btn:last-child{border-right:none}
+.seg-btn.active{background:#0969da;color:#fff}
+.seg-btn:hover:not(.active){background:#eaeef2}
+.hist-sel{font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #d0d7de;
+  background:#fff;color:#1a1a2e;outline:none;cursor:pointer;max-width:240px}
+.hist-sel:focus{border-color:#0969da}
+
+/* Report: empty / how-to */
+.report-howto{margin:40px auto;max-width:420px;text-align:center;color:#57606a;font-size:13px;line-height:1.8}
+.report-howto code{background:#f6f8fa;border:1px solid #d0d7de;padding:2px 8px;border-radius:4px;
+  font-family:monospace;font-size:12px;color:#0969da}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat-card{background:#fff;border-radius:10px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,.07);
+  text-align:center}
+.stat-num{font-size:28px;font-weight:700;line-height:1}
+.stat-label{font-size:11px;color:#888;margin-top:4px}
+
+/* Executive summary */
+.exec-card{background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:12px;
+  padding:18px 22px;color:#fff;box-shadow:0 4px 12px rgba(29,78,216,.25)}
+.exec-title{font-size:11px;font-weight:700;letter-spacing:.08em;opacity:.75;margin-bottom:8px;text-transform:uppercase}
+.exec-text{font-size:13px;line-height:1.85}
+
+/* Section */
+.section-title{font-size:14px;font-weight:700;color:#0d1117;margin-bottom:10px;
+  display:flex;align-items:center;gap:6px}
+.section-title::after{content:'';flex:1;height:1px;background:#e5e7eb;margin-left:6px}
+
+/* Themes grid */
+.themes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.theme-card{background:#fff;border-radius:10px;padding:14px 15px;
+  box-shadow:0 1px 3px rgba(0,0,0,.07);border-top:3px solid #ddd}
+.theme-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.theme-name{font-size:14px;font-weight:700;color:#0d1117}
+.theme-trend{font-size:11px;font-weight:600}
+.theme-bar-wrap{position:relative;height:6px;background:#f1f5f9;border-radius:3px;margin-bottom:9px;overflow:hidden}
+.theme-bar{height:100%;border-radius:3px;transition:width .4s}
+.theme-count{position:absolute;right:0;top:-14px;font-size:10px;color:#888}
+.theme-desc{font-size:12px;color:#555;line-height:1.6;margin-bottom:8px}
+.theme-keywords{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:7px}
+.kw{font-size:10px;padding:1px 7px;border-radius:8px;background:#f0f7ff;color:#0969da;border:1px solid #bfdbfe}
+.theme-papers{display:flex;flex-direction:column;gap:2px}
+.tp-link{font-size:11px;color:#0969da;text-decoration:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.tp-link:hover{text-decoration:underline}
+
+/* Top papers */
+.top-papers-list{display:flex;flex-direction:column;gap:7px}
+.top-paper-row{display:flex;gap:10px;align-items:flex-start;background:#fff;
+  border-radius:8px;padding:10px 13px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.tp-num{font-size:18px;font-weight:800;color:#e5e7eb;line-height:1;width:26px;flex-shrink:0;padding-top:1px}
+.tp-body{flex:1;min-width:0}
+.tp-title{font-size:13px;font-weight:600;color:#0d1117;text-decoration:none;line-height:1.4;display:block}
+.tp-title:hover{color:#0969da;text-decoration:underline}
+.tp-meta{font-size:11px;color:#8b949e;margin-top:2px}
+.tp-reason{font-size:11px;color:#555;margin-top:4px;font-style:italic;line-height:1.5}
+
+/* Landscape map (PI×Code subscenarios) */
+.landscape-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.ls-card{background:#fff;border-radius:10px;border:1.5px solid #e2e8f0;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.ls-header{display:flex;align-items:center;gap:6px}
+.ls-scenario{font-size:12px;font-weight:700;color:#0d1117;flex:1;line-height:1.3}
+.ls-badge{font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700;color:#fff;flex-shrink:0}
+.mat-saturated{background:#ef4444}.mat-active{background:#f59e0b}
+.mat-emerging{background:#22c55e}.mat-blank{background:#94a3b8}
+.ls-count{font-size:11px;color:#8b949e}
+.ls-summary{font-size:11px;color:#57606a;line-height:1.5}
+.ls-note{font-size:11px;font-style:italic;color:#8b949e;line-height:1.4;border-top:1px solid #f1f5f9;padding-top:6px;margin-top:2px}
+
+/* Research opportunities */
+.opp-list{display:flex;flex-direction:column;gap:10px}
+.opp-card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);overflow:hidden}
+.opp-header{display:flex;align-items:center;gap:10px;padding:12px 15px;cursor:pointer;user-select:none}
+.opp-header:hover{background:#f8fafc}
+.opp-icon{font-size:20px;flex-shrink:0}
+.opp-title{font-size:13px;font-weight:700;color:#0d1117;flex:1}
+.opp-badges{display:flex;gap:5px;flex-shrink:0}
+.badge-pill{font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;color:#fff}
+.diff-high{background:#ef4444}.diff-medium{background:#f59e0b}.diff-low{background:#22c55e}
+.nov-high{background:#8b5cf6}.nov-medium{background:#6366f1}.nov-low{background:#94a3b8}
+.chevron{color:#9ca3af;font-size:12px;transition:transform .2s;margin-left:4px}
+.chevron.open{transform:rotate(90deg)}
+.opp-body{display:none;padding:0 15px 14px;border-top:1px solid #f1f5f9}
+.opp-body.open{display:block}
+.opp-row{display:flex;gap:6px;margin-top:9px;font-size:12px;line-height:1.65}
+.opp-row-label{font-weight:700;color:#57606a;white-space:nowrap;width:46px;flex-shrink:0}
+.opp-row-val{color:#1a1a2e;flex:1}
+.opp-papers{display:flex;flex-direction:column;gap:3px;margin-top:8px}
+
+/* Idea sparks */
+.ideas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.idea-card{border-radius:10px;padding:15px;box-shadow:0 1px 3px rgba(0,0,0,.07);position:relative;overflow:hidden}
+.idea-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.idea-feas-high::before{background:linear-gradient(90deg,#22c55e,#16a34a)}
+.idea-feas-medium::before{background:linear-gradient(90deg,#f59e0b,#d97706)}
+.idea-feas-low::before{background:linear-gradient(90deg,#94a3b8,#64748b)}
+.idea-feas-high{background:#f0fdf4}
+.idea-feas-medium{background:#fffbeb}
+.idea-feas-low{background:#f8fafc}
+.idea-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;gap:8px}
+.idea-title{font-size:13px;font-weight:700;color:#0d1117;line-height:1.35;flex:1}
+.idea-feas-tag{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;
+  flex-shrink:0;white-space:nowrap}
+.feas-tag-high{background:#dcfce7;color:#15803d}
+.feas-tag-medium{background:#fef3c7;color:#92400e}
+.feas-tag-low{background:#f1f5f9;color:#64748b}
+.idea-desc{font-size:12px;color:#374151;line-height:1.7;margin-bottom:8px}
+.idea-inspi{font-size:11px;color:#6b7280;font-style:italic;line-height:1.5}
+.idea-inspi span{font-style:normal;font-weight:600;color:#0969da}
+.idea-papers{display:flex;flex-direction:column;gap:2px;margin-top:7px;
+  padding-top:7px;border-top:1px solid rgba(0,0,0,.07)}
+.idea-paper-link{font-size:11px;color:#0969da;text-decoration:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.idea-paper-link:hover{text-decoration:underline}
+.idea-prior-art{margin-top:8px;padding:7px 9px;background:#fff7ed;border-left:3px solid #f97316;
+  border-radius:4px;font-size:11px;color:#7c2d12}
+.idea-prior-art-title{font-weight:700;color:#9a3412;margin-bottom:4px;font-size:11px}
+.idea-prior-art-item{margin-bottom:5px;line-height:1.5}
+.idea-prior-art-item:last-child{margin-bottom:0}
+.idea-prior-art-item a{color:#c2410c;font-weight:600;text-decoration:none}
+.idea-prior-art-item a:hover{text-decoration:underline}
+.idea-prior-art-overlap{color:#7c2d12;display:block;margin-top:2px}
+.idea-diff{margin-top:7px;padding:7px 9px;background:#ecfdf5;border-left:3px solid #10b981;
+  border-radius:4px;font-size:11px;color:#065f46;line-height:1.6}
+.idea-diff-title{font-weight:700;color:#047857;margin-bottom:3px;font-size:11px}
+.idea-novelty-after{margin-top:6px;font-size:10.5px;color:#6b7280;font-style:italic}
+.idea-novelty-after b{font-style:normal;color:#374151}
+
+/* New methodology fields (claim-driven schema) */
+.idea-strategy-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.idea-strategy-tag{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;letter-spacing:.3px}
+.idea-strategy-tag-new{background:#dbeafe;color:#1e40af;border:1px solid #3b82f6}
+.idea-strategy-tag-legacy{background:#f3f4f6;color:#6b7280;border:1px dashed #9ca3af}
+.idea-core-claim{margin-top:4px;margin-bottom:8px;padding:8px 10px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:4px;font-size:12px;color:#78350f;line-height:1.55;font-weight:500}
+.idea-core-claim b{color:#92400e}
+.idea-ftype-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:8px;vertical-align:middle}
+.ftype-hypothesis{background:#dbeafe;color:#1e40af;border:1px solid #3b82f6}
+.ftype-rq{background:#f3e8ff;color:#6b21a8;border:1px solid #9333ea}
+.ftype-construct{background:#fed7aa;color:#7c2d12;border:1px solid #ea580c}
+
+/* method_type / contribution_form badges */
+.idea-axis-tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;vertical-align:middle;letter-spacing:.2px}
+.mtype-empirical{background:#d1fae5;color:#065f46;border:1px solid #10b981}
+.mtype-technical{background:#dbeafe;color:#1e40af;border:1px solid #3b82f6}
+.mtype-theoretical{background:#ede9fe;color:#5b21b6;border:1px solid #8b5cf6}
+.mtype-vision{background:#ffedd5;color:#9a3412;border:1px solid #f97316}
+.cform-new-problem{background:#fef3c7;color:#854d0e;border:1px solid #d97706;font-weight:800}
+.cform-new-solution{background:#cffafe;color:#155e75;border:1px solid #06b6d4}
+.cform-better{background:#e7e5e4;color:#44403c;border:1px dashed #78716c}
+
+/* preprint_risk badge in stress_test */
+.idea-preprint-tag{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:700}
+.idea-preprint-tag.pass{background:#bbf7d0;color:#14532d}
+.idea-preprint-tag.warn{background:#fef3c7;color:#854d0e}
+.idea-preprint-tag.danger{background:#fee2e2;color:#7f1d1d;animation:pulse-red 2s infinite}
+@keyframes pulse-red{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.3)}50%{box-shadow:0 0 0 4px rgba(220,38,38,0)}}
+.idea-preprint-reason{font-size:10.5px;color:#7f1d1d;font-style:italic;display:block;margin-top:2px}
+
+/* one_liner — 突出展示 idea 一句话总结 */
+.idea-one-liner-block{margin:6px 0 10px;padding:10px 12px;background:linear-gradient(135deg,#fef9c3,#fef3c7);border-left:5px solid #ca8a04;border-radius:6px;box-shadow:0 1px 2px rgba(202,138,4,.12)}
+.idea-one-liner-header{margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.idea-one-liner-label{font-size:11px;font-weight:700;color:#854d0e;letter-spacing:.5px;text-transform:uppercase}
+.idea-one-liner-text{font-size:14px;font-weight:700;color:#713f12;line-height:1.5;letter-spacing:.2px}
+.idea-rqs{margin-top:7px;padding:7px 9px;background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:4px}
+.idea-rqs-title{font-weight:700;color:#6d28d9;margin-bottom:4px;font-size:11px}
+.idea-rqs-list{margin:0;padding-left:18px;font-size:11px;color:#3730a3;line-height:1.55}
+.idea-rqs-list li{margin-bottom:2px}
+.idea-study{margin-top:6px;padding:5px 8px;background:#ecfeff;border-radius:4px;font-size:11px;color:#155e75;line-height:1.5}
+.idea-study b{color:#0e7490}
+.idea-expected{margin-top:4px;padding:5px 8px;background:#f0fdf4;border-radius:4px;font-size:11px;color:#14532d;line-height:1.5}
+.idea-expected b{color:#15803d}
+.idea-null{margin-top:4px;padding:5px 8px;background:#fef2f2;border-radius:4px;font-size:11px;color:#7f1d1d;line-height:1.5}
+.idea-null b{color:#991b1b}
+.idea-eval-block{margin-top:8px;padding:7px 9px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:4px}
+.idea-eval-header{font-size:11px;font-weight:700;color:#14532d;margin-bottom:5px;letter-spacing:.2px}
+.idea-eval-block .idea-expected{margin-top:0;margin-bottom:4px;background:#dcfce7}
+.idea-eval-block .idea-null{margin-top:0;margin-bottom:0;background:#fee2e2}
+
+/* 4-field framework: motivation / novelty / feasibility */
+.idea-why-matters{margin-top:6px;padding:6px 9px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:4px;font-size:11.5px;color:#78350f;line-height:1.5}
+.idea-why-matters b{color:#92400e}
+.idea-novelty-block{margin-top:8px;padding:8px 10px;background:#faf5ff;border:1px solid #d8b4fe;border-left:4px solid #9333ea;border-radius:5px}
+.idea-novelty-header{font-size:11px;font-weight:700;color:#6b21a8;margin-bottom:5px;letter-spacing:.3px}
+.idea-novelty-stmt{font-size:11.5px;color:#581c87;line-height:1.55;margin-bottom:6px}
+.idea-prior-list{margin-top:6px;padding-top:6px;border-top:1px dashed #d8b4fe}
+.idea-prior-list-title{font-size:10.5px;font-weight:700;color:#7e22ce;margin-bottom:4px}
+.idea-prior-item{margin-bottom:5px;padding-left:6px;border-left:2px solid #e9d5ff;font-size:11px;line-height:1.5}
+.idea-prior-item:last-child{margin-bottom:0}
+.idea-prior-item a{color:#7c3aed;font-weight:600;text-decoration:none}
+.idea-prior-item a:hover{text-decoration:underline}
+.idea-prior-detail{color:#581c87;font-size:10.5px;margin-top:1px}
+.idea-prior-detail .lbl{color:#9333ea;font-weight:700;margin-right:3px}
+.idea-delta{margin-top:6px;padding-top:6px;border-top:1px dashed #d8b4fe;font-size:11px;color:#6b21a8;line-height:1.5}
+.idea-delta b{color:#7e22ce}
+.idea-feas-block{margin-top:8px;padding:7px 9px;background:#f0f9ff;border-left:3px solid #0284c7;border-radius:4px}
+.idea-feas-header{font-size:11px;font-weight:700;color:#075985;margin-bottom:4px}
+.idea-feas-row{font-size:10.5px;color:#0c4a6e;line-height:1.55;margin-bottom:2px}
+.idea-feas-row .lbl{color:#0369a1;font-weight:700;margin-right:3px}
+
+/* FINER score */
+.idea-finer-block{margin-top:8px;padding:7px 9px;background:#fefce8;border-left:3px solid #ca8a04;border-radius:4px}
+.idea-finer-header{font-size:11px;font-weight:700;color:#854d0e;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.idea-finer-avg{font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px}
+.idea-finer-avg.pass{background:#bbf7d0;color:#14532d}
+.idea-finer-avg.fail{background:#fecaca;color:#7f1d1d}
+.idea-finer-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;text-align:center}
+.idea-finer-cell{padding:5px 0;border-radius:3px;font-weight:600;display:flex;flex-direction:column;align-items:center}
+.idea-finer-cell .label{opacity:.75;font-size:10.5px;letter-spacing:.3px}
+.idea-finer-cell b{font-size:14px;font-weight:800;margin-top:2px}
+.idea-finer-cell.high{background:#bbf7d0;color:#14532d}
+.idea-finer-cell.mid{background:#fef3c7;color:#854d0e}
+.idea-finer-cell.low{background:#fed7aa;color:#7c2d12}
+.idea-finer-cell.fail{background:#fecaca;color:#7f1d1d}
+
+/* Stress test (Devil's Advocate) */
+.idea-stress-block{margin-top:7px;padding:7px 9px;background:#fff1f2;border-left:3px solid #be123c;border-radius:4px}
+.idea-stress-header{font-size:11px;font-weight:700;color:#9f1239;margin-bottom:5px}
+.idea-stress-row{font-size:10.5px;color:#881337;line-height:1.55;margin-bottom:3px}
+.idea-stress-row .lbl{color:#be123c;font-weight:700;margin-right:3px}
+.idea-fallacy-tag{font-size:10px;padding:1px 7px;border-radius:8px;font-weight:600;display:inline-block}
+.idea-fallacy-tag.pass{background:#bbf7d0;color:#14532d}
+.idea-fallacy-tag.warn{background:#fef3c7;color:#854d0e}
+
+/* AI failure mode self-check */
+.idea-failmode-block{margin-top:7px;padding:7px 9px;background:#f5f3ff;border-left:3px solid #5b21b6;border-radius:4px}
+.idea-failmode-header{font-size:10.5px;font-weight:700;color:#4c1d95;margin-bottom:5px;letter-spacing:.2px}
+.idea-failmode-row{font-size:10.5px;color:#5b21b6;line-height:1.55;margin-bottom:3px}
+.idea-failmode-row .lbl{color:#6d28d9;font-weight:700;margin-right:3px}
+.idea-score-pill{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:700;background:#1e293b;color:#fff}
+.idea-score-pill.high{background:#15803d}
+.idea-score-pill.mid{background:#b45309}
+.idea-score-pill.low{background:#6b7280}
+.idea-prior-art-risk{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600}
+.par-low{background:#dcfce7;color:#15803d}.par-medium{background:#fef3c7;color:#92400e}.par-high{background:#fee2e2;color:#991b1b}
+.idea-signal{margin-top:6px;padding:6px 9px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:4px;font-size:11px;color:#1e3a8a;line-height:1.5}
+.idea-signal b{color:#1e40af}
+.idea-formula{margin-top:6px;padding:7px 9px;background:#fafaf9;border:1px solid #e7e5e4;border-radius:4px;font-size:10.5px;color:#44403c;line-height:1.55}
+.idea-formula-row{display:flex;gap:4px;margin-bottom:2px}
+.idea-formula-row:last-child{margin-bottom:0}
+.idea-formula-key{font-weight:700;color:#78716c;flex-shrink:0;width:54px}
+.idea-formula-val{flex:1;color:#1c1917}
+.idea-score-grid{margin-top:6px;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;font-size:9.5px;text-align:center}
+.idea-score-cell{padding:3px 0;background:#f1f5f9;border-radius:3px;color:#475569}
+.idea-score-cell b{display:block;color:#0f172a;font-size:11px;font-weight:700}
+.idea-falsifier{margin-top:6px;font-size:11px;color:#0f172a;line-height:1.5;padding:5px 8px;background:#f0fdf4;border-radius:4px}
+.idea-falsifier b{color:#15803d}
+.idea-kill{margin-top:4px;font-size:10.5px;color:#7f1d1d;line-height:1.5;padding:5px 8px;background:#fef2f2;border-radius:4px}
+.idea-kill b{color:#991b1b}
+.idea-priorart-check{margin-top:4px;font-size:10.5px;color:#374151;line-height:1.5;padding:5px 8px;background:#f9fafb;border-radius:4px}
+.idea-priorart-check b{color:#1f2937}
+
+/* opp expanded fields */
+.opp-meta-row{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+
+/* SE Spotlight */
+.se-spotlight{background:linear-gradient(135deg,#0f172a,#1e3a5f);border-radius:12px;
+  padding:16px 20px;color:#e0f2fe;box-shadow:0 4px 14px rgba(15,23,42,.3)}
+.se-spotlight-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.se-badge{background:#0ea5e9;color:#fff;font-size:10px;font-weight:700;
+  padding:2px 8px;border-radius:8px;letter-spacing:.05em}
+.se-summary{font-size:12px;line-height:1.75;opacity:.9;margin-bottom:12px}
+.se-subtopics{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.se-sub{background:rgba(255,255,255,.06);border-radius:8px;padding:10px 12px;
+  border:1px solid rgba(255,255,255,.1)}
+.se-sub-name{font-size:12px;font-weight:700;color:#7dd3fc;margin-bottom:4px;
+  display:flex;align-items:center;gap:6px}
+.se-sub-count{font-size:10px;background:rgba(14,165,233,.25);padding:1px 6px;
+  border-radius:6px;color:#bae6fd}
+.se-sub-hi{font-size:11px;color:#cbd5e1;line-height:1.6;margin-bottom:6px}
+.se-sub-papers{display:flex;flex-direction:column;gap:2px}
+.se-tp-link{font-size:11px;color:#93c5fd;text-decoration:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.se-tp-link:hover{text-decoration:underline;color:#60a5fa}
+.se-badge-tag{font-size:10px;background:rgba(14,165,233,.15);color:#38bdf8;
+  border:1px solid rgba(56,189,248,.3);padding:1px 7px;border-radius:8px}
+
+/* ── Resize handle ── */
+.resize-handle{width:5px;flex-shrink:0;cursor:col-resize;background:#21262d;
+  position:relative;z-index:10;transition:background .15s}
+.resize-handle:hover,.resize-handle.dragging{background:#388bfd}
+
+/* ── Terminal panel ── */
+.term-panel{width:480px;flex-shrink:0;display:flex;flex-direction:column;
+  background:#0d1117;border-left:1px solid #21262d}
+.term-tabs{display:flex;align-items:center;background:#0d1117;
+  border-bottom:1px solid #21262d;flex-shrink:0;overflow-x:auto;min-height:0}
+.term-tabs::-webkit-scrollbar{height:3px}
+.term-tabs::-webkit-scrollbar-thumb{background:#30363d;border-radius:2px}
+.term-tab{display:flex;align-items:center;gap:4px;padding:5px 10px;font-size:12px;
+  color:#8b949e;cursor:pointer;border-right:1px solid #21262d;white-space:nowrap;
+  user-select:none;background:#0d1117;border-bottom:2px solid transparent;transition:color .12s}
+.term-tab:hover{color:#c9d1d9;background:#161b22}
+.term-tab.active{color:#e6edf3;background:#161b22;border-bottom-color:#58a6ff}
+.term-tab-close{font-size:11px;color:#6e7681;background:none;border:none;cursor:pointer;
+  padding:0 2px;line-height:1;border-radius:3px;flex-shrink:0}
+.term-tab-close:hover{color:#f85149;background:#21262d}
+.term-add-btn{padding:4px 10px;font-size:16px;line-height:1;color:#6e7681;background:none;
+  border:none;cursor:pointer;flex-shrink:0}
+.term-add-btn:hover{color:#58a6ff}
+.term-header{display:flex;align-items:center;gap:6px;padding:6px 10px;
+  background:#161b22;border-bottom:1px solid #21262d;flex-shrink:0;flex-wrap:wrap}
+.term-btn{font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid #30363d;
+  background:#21262d;color:#c9d1d9;cursor:pointer;transition:all .12s;white-space:nowrap}
+.term-btn:hover{background:#30363d}
+.term-btn.primary{background:#1f6feb;border-color:#1f6feb}
+.term-btn.primary:hover{background:#388bfd}
+.term-btn.green{background:#238636;border-color:#238636}
+.term-btn.green:hover{background:#2ea043}
+.term-bodies{flex:1;overflow:hidden;position:relative;min-height:0}
+.term-body{display:none;position:absolute;inset:0;padding:5px 4px 4px}
+.term-body.active{display:block}
+
+/* ── File Editor ── */
+#view-editor{flex-direction:row}
+.editor-sidebar{width:220px;flex-shrink:0;background:#0d1117;border-right:1px solid #21262d;display:flex;flex-direction:column;overflow:hidden}
+.editor-sidebar-hdr{padding:5px 8px;font-size:10px;font-weight:700;color:#6e7681;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #21262d;flex-shrink:0;display:flex;align-items:center;gap:4px}
+.editor-tree{flex:1;overflow-y:auto;padding:3px 0}
+.editor-tree::-webkit-scrollbar{width:4px}
+.editor-tree::-webkit-scrollbar-thumb{background:#30363d;border-radius:2px}
+.tree-item{display:flex;align-items:center;gap:4px;padding:3px 6px;font-size:12px;color:#c9d1d9;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none;border-radius:3px;margin:0 3px}
+.tree-item:hover{background:#161b22}
+.tree-item.active{background:#1f3a5f;color:#79c0ff}
+.tree-item.is-dir{color:#e0e0e0}
+.ti-icon{flex-shrink:0;width:14px;text-align:center;font-size:11px}
+.ti-name{flex:1;overflow:hidden;text-overflow:ellipsis}
+.editor-main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#1e1e1e}
+.editor-topbar{display:flex;align-items:center;gap:6px;padding:4px 8px;background:#252526;border-bottom:1px solid #454545;flex-shrink:0;min-height:30px}
+.editor-filepath{font-size:11px;color:#9d9d9d;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.editor-dirty{width:8px;height:8px;background:#e5c07b;border-radius:50%;flex-shrink:0;display:none}
+.editor-dirty.on{display:block}
+.edbtn{font-size:11px;padding:2px 9px;border-radius:4px;border:1px solid #454545;background:#2d2d2d;color:#cccccc;cursor:pointer;white-space:nowrap;transition:all .12s}
+.edbtn:hover:not(:disabled){background:#3d3d3d}
+.edbtn:disabled{opacity:.35;cursor:default}
+.edbtn.primary{background:#0e639c;border-color:#0e639c;color:#fff}
+.edbtn.primary:hover:not(:disabled){background:#1177bb}
+.editor-body{flex:1;display:flex;overflow:hidden}
+#monacoContainer{flex:1;overflow:hidden;display:none}
+#editorFallback{flex:1;display:none;background:#1e1e1e;color:#d4d4d4;font-family:Menlo,Monaco,'Courier New',monospace;font-size:13px;line-height:1.65;padding:12px 16px;border:none;outline:none;resize:none;overflow:auto;tab-size:4;white-space:pre}
+.editor-placeholder{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#555;font-size:13px;gap:8px}
+.md-preview{flex:1;min-width:0;border-left:1px solid #454545;overflow-y:auto;padding:16px 22px;background:#fff;display:none;font-size:13px;line-height:1.75;color:#1a1a2e}
+.md-preview.on{display:block}
+.md-preview h1,.md-preview h2,.md-preview h3{margin:14px 0 6px;color:#0d1117;border-bottom:1px solid #e5e7eb;padding-bottom:3px}
+.md-preview h4,.md-preview h5{margin:8px 0 4px;color:#0d1117}
+.md-preview p{margin-bottom:7px}
+.md-preview code{background:#f6f8fa;border:1px solid #e5e7eb;padding:1px 4px;border-radius:3px;font-family:monospace;font-size:11.5px}
+.md-preview pre{background:#f6f8fa;border:1px solid #e5e7eb;padding:10px;border-radius:5px;overflow-x:auto;margin:6px 0}
+.md-preview pre code{background:none;border:none;padding:0}
+.md-preview ul,.md-preview ol{padding-left:20px;margin-bottom:7px}
+.md-preview li{margin-bottom:2px}
+.md-preview a{color:#0969da}
+.md-preview table{border-collapse:collapse;width:100%;margin:6px 0;font-size:12px}
+.md-preview th,.md-preview td{border:1px solid #d0d7de;padding:5px 10px}
+.md-preview th{background:#f6f8fa;font-weight:600}
+.md-preview blockquote{border-left:4px solid #d0d7de;margin:6px 0;padding:0 12px;color:#6e7681}
+.md-preview hr{border:none;border-top:1px solid #e5e7eb;margin:10px 0}
+.md-preview img{max-width:100%;border-radius:4px}
+
+/* ── File Manager (Browser) ── */
+#view-browser{flex-direction:column;background:#f8fafc}
+.fb-bar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.fb-crumbs{display:flex;align-items:center;gap:2px;flex:1;flex-wrap:wrap;overflow:hidden}
+.fb-crumb{font-size:12px;color:#0969da;cursor:pointer;padding:2px 6px;border-radius:4px;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.fb-crumb:hover{background:#f0f7ff}
+.fb-crumb.fb-last{color:#1a1a2e;cursor:default;font-weight:600}
+.fb-crumb.fb-last:hover{background:none}
+.fb-sep{color:#cbd5e1;font-size:13px;flex-shrink:0}
+.fb-scroll{flex:1;overflow-y:auto;padding:8px 12px}
+.fb-scroll::-webkit-scrollbar{width:5px}
+.fb-scroll::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+.fb-tbl{width:100%;border-collapse:collapse}
+.fb-tbl th{font-size:10px;color:#6b7280;font-weight:700;text-align:left;padding:5px 10px;
+  border-bottom:2px solid #e5e7eb;position:sticky;top:0;background:#f8fafc;
+  text-transform:uppercase;letter-spacing:.05em;cursor:pointer;user-select:none;white-space:nowrap}
+.fb-tbl th:hover{color:#0969da}
+.fb-tbl th .sort-arrow{margin-left:3px;opacity:.4}
+.fb-tbl th.sorted .sort-arrow{opacity:1;color:#0969da}
+.fb-tbl td{font-size:12.5px;padding:5px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.fb-tbl tr:hover td{background:#f0f7ff;cursor:pointer}
+.fb-name-cell{display:flex;align-items:center;gap:7px}
+.fb-item-icon{font-size:15px;flex-shrink:0;width:18px;text-align:center}
+.fb-item-name{font-weight:500;color:#0d1117;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px}
+.fb-tbl tr.fb-dir .fb-item-name{color:#0969da}
+.fb-col-type{color:#9ca3af;font-size:11px;white-space:nowrap}
+.fb-col-size{color:#6b7280;font-size:11.5px;white-space:nowrap;text-align:right}
+.fb-col-date{color:#6b7280;font-size:11px;white-space:nowrap}
+.fb-empty{text-align:center;padding:40px;color:#9ca3af;font-size:13px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ── Top bar ── -->
+<div class="topbar">
+  <div class="logo">📚 论文浏览器</div>
+
+  <button class="tab-btn active" id="tab-papers"  onclick="switchTab('papers')">📄 论文浏览</button>
+  <button class="tab-btn"        id="tab-report"  onclick="switchTab('report')">📊 研究报告</button>
+  <button class="tab-btn"        id="tab-editor"  onclick="switchTab('editor')">📁 文件编辑</button>
+  <button class="tab-btn"        id="tab-browser" onclick="switchTab('browser')">🗂 文件夹</button>
+
+  <span class="topbar-sep">|</span>
+
+  <!-- Papers controls (hidden when report tab active) -->
+  <span id="papers-controls" style="display:contents">
+    <select id="fileSelect" onchange="loadPapers(this.value)" title="论文文件"></select>
+    <input id="searchInput" type="text" placeholder="🔍 搜索标题 / 作者 / 关键词" oninput="scheduleFilter()">
+    <span class="topbar-sep">|</span>
+    <input id="dateFrom" type="date" title="发表日期从" onchange="applyFilter()">
+    <span style="color:#484f58;font-size:11px">—</span>
+    <input id="dateTo"   type="date" title="发表日期至" onchange="applyFilter()">
+    <button class="refresh-btn" onclick="clearDates()" title="清除日期筛选" style="padding:4px 8px;font-size:11px">✕ 日期</button>
+    <span class="topbar-sep">|</span>
+    <div class="source-chips" id="sourceChips"></div>
+  </span>
+
+  <!-- Report controls (hidden when papers tab active) -->
+  <span id="report-controls" style="display:none;contents">
+    <div class="seg-ctrl">
+      <button class="seg-btn active" id="btnLatest" onclick="switchToLatest()">最新</button>
+      <button class="seg-btn" id="btnHistory" onclick="switchToHistory()">历史 ▾</button>
+    </div>
+    <select id="histSelect" class="hist-sel" style="display:none" onchange="document.getElementById('histSelect2').value=this.value;loadReport(this.value)"></select>
+    <button class="refresh-btn" onclick="initReports()" title="刷新报告列表">↺</button>
+  </span>
+
+  <span class="topbar-sep">|</span>
+  <input id="apiKeyInput" type="text" placeholder="Claude API Key（AI摘要 / 生成报告）"
+         oninput="saveApiKey()" title="填入后点击 AI摘要，或在终端中运行报告生成命令">
+
+  <div class="topbar-right">
+    <span class="count-pill" id="countBadge">— 篇</span>
+  </div>
+</div>
+
+<!-- ── Main ── -->
+<div class="main">
+
+  <!-- Left content -->
+  <div class="content-panel">
+
+    <!-- Papers view -->
+    <div class="view active" id="view-papers">
+      <div class="papers-scroll" id="papersList">
+        <div class="empty-state"><div class="eicon">📄</div>请选择论文文件</div>
+      </div>
+    </div>
+
+    <!-- Report view -->
+    <div class="view" id="view-report">
+      <div class="report-toolbar">
+        <div class="seg-ctrl">
+          <button class="seg-btn active" id="btnLatest2" onclick="switchToLatest()">最新</button>
+          <button class="seg-btn" id="btnHistory2" onclick="switchToHistory()">历史 ▾</button>
+        </div>
+        <select id="histSelect2" class="hist-sel" style="display:none" onchange="document.getElementById('histSelect').value=this.value;loadReport(this.value)"></select>
+        <button class="refresh-btn" onclick="initReports()" title="刷新报告列表">↺</button>
+      </div>
+      <div class="report-scroll" id="reportContent">
+        <div class="report-howto" id="reportHowto">
+          <div style="font-size:32px;margin-bottom:14px">🔬</div>
+          <div style="font-size:15px;font-weight:700;color:#0d1117;margin-bottom:10px">
+            生成今日调研报告
+          </div>
+          <p>在右侧终端中运行：</p>
+          <p style="margin-top:8px"><code>python generate_report.py --claude-key YOUR_KEY</code></p>
+          <p style="margin-top:12px;color:#8b949e;font-size:12px">
+            约 30~60 秒生成完成，点击「↺ 刷新列表」即可查看
+          </p>
+        </div>
+        <div id="reportMain" style="display:none;display:flex;flex-direction:column;gap:18px"></div>
+      </div>
+    </div>
+
+    <!-- File Browser view -->
+    <div class="view" id="view-browser">
+      <div class="fb-bar">
+        <select id="fbRootSelect" class="hist-sel" style="max-width:190px;flex-shrink:0" onchange="fbSelectRoot(this.value)" title="切换根目录"></select>
+        <button class="btn-sm" onclick="fbAddRoot()" title="添加目录（支持 /add-dir 来的路径）">＋ 添加</button>
+        <button class="btn-sm" id="fbRemoveBtn" onclick="fbRemoveRoot()" title="移除当前根目录" style="display:none">✕</button>
+        <span class="fb-sep" style="margin:0 2px">|</span>
+        <button class="btn-sm" id="fbUpBtn" onclick="fbUp()" title="上级目录" disabled>⬆ 上级</button>
+        <div class="fb-crumbs" id="fbCrumbs"></div>
+        <button class="btn-sm" onclick="fbRefresh()" title="刷新">↺ 刷新</button>
+      </div>
+      <div class="fb-scroll">
+        <table class="fb-tbl">
+          <thead>
+            <tr>
+              <th style="width:45%" onclick="fbSort('name')">名称 <span class="sort-arrow" id="fbSortName">▲</span></th>
+              <th style="width:12%" onclick="fbSort('type')">类型 <span class="sort-arrow" id="fbSortType"></span></th>
+              <th style="width:13%" onclick="fbSort('size')">大小 <span class="sort-arrow" id="fbSortSize"></span></th>
+              <th style="width:30%" onclick="fbSort('mtime')">修改时间 <span class="sort-arrow" id="fbSortMtime"></span></th>
+            </tr>
+          </thead>
+          <tbody id="fbItems"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Editor view -->
+    <div class="view" id="view-editor">
+      <div class="editor-sidebar">
+        <div class="editor-sidebar-hdr">
+          <span>文件浏览</span>
+          <button class="edbtn" style="margin-left:auto;padding:1px 7px;font-size:11px" onclick="refreshFileTree()" title="刷新目录">↺</button>
+        </div>
+        <div class="editor-tree" id="editorTree">
+          <div style="padding:10px 10px;color:#484f58;font-size:11px">点击「文件编辑」tab 后自动加载…</div>
+        </div>
+      </div>
+      <div class="editor-main">
+        <div class="editor-topbar">
+          <span class="editor-filepath" id="editorFilePath">请在左侧选择文件</span>
+          <span class="editor-dirty" id="editorDirtyDot" title="有未保存的更改"></span>
+          <button class="edbtn" id="mdPreviewBtn" style="display:none" onclick="toggleMdPreview()">👁 预览</button>
+          <button class="edbtn primary" id="editorSaveBtn" onclick="saveCurrentFile()" disabled>💾 保存</button>
+        </div>
+        <div class="editor-body">
+          <div class="editor-placeholder" id="editorPlaceholder">
+            <span style="font-size:36px">📂</span>
+            <span>从左侧文件树选择文件开始编辑</span>
+            <span style="font-size:11px;color:#444">支持 Python、JS、JSON、Markdown 等文本文件 · Cmd/Ctrl+S 保存</span>
+          </div>
+          <div id="monacoContainer"></div>
+          <textarea id="editorFallback" readonly spellcheck="false"></textarea>
+          <div class="md-preview" id="mdPreviewPane"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Resize handle -->
+  <div class="resize-handle" id="resizeHandle"></div>
+
+  <!-- Terminal -->
+  <div class="term-panel" id="termPanel">
+    <div class="term-tabs" id="termTabs">
+      <button class="term-add-btn" onclick="newTerminal()" title="新建终端">＋</button>
+    </div>
+    <div class="term-header">
+      <button class="term-btn primary" onclick="sendCmd('python paper_scraper.py --llm-only --max 50\n')">▶ 爬取论文</button>
+      <button class="term-btn green"   onclick="sendCmd('python generate_report.py --claude-key ' + getApiKey() + '\n')">📊 生成报告</button>
+      <button class="term-btn"         onclick="sendCmd('ls output/\n')">查看输出</button>
+      <button class="term-btn"         onclick="termClear()" title="清屏并重置终端">⌫ 清屏</button>
+    </div>
+    <div class="term-bodies" id="termBodies"></div>
+  </div>
+
+</div><!-- /main -->
+</div><!-- /app -->
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════
+let allPapers   = [];
+let shownPapers = [];
+let activeChips = new Set();
+let filterTimer = null;
+let currentTab  = 'papers';
+
+// ═══════════════════════════════════════════════════════
+//  Boot
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  loadApiKey();
+  initFiles();
+  initReports();
+  initTerminal();
+  initResizer();
+});
+
+// ═══════════════════════════════════════════════════════
+//  Tab switching
+// ═══════════════════════════════════════════════════════
+function switchTab(tab) {
+  currentTab = tab;
+  ['papers', 'report', 'browser', 'editor'].forEach(t => {
+    document.getElementById(`view-${t}`).classList.toggle('active', t === tab);
+    document.getElementById(`tab-${t}`)?.classList.toggle('active', t === tab);
+  });
+  document.getElementById('papers-controls').style.display = tab === 'papers' ? 'contents' : 'none';
+  document.getElementById('report-controls').style.display = tab === 'report' ? 'contents' : 'none';
+  if (tab === 'report') updateCountBadge();
+  if (tab === 'editor')  initEditorTab();
+  if (tab === 'browser') initBrowserTab();
+}
+
+// ═══════════════════════════════════════════════════════
+//  API Key
+// ═══════════════════════════════════════════════════════
+function saveApiKey() {
+  localStorage.setItem('claudeKey', document.getElementById('apiKeyInput').value);
+}
+function loadApiKey() {
+  document.getElementById('apiKeyInput').value = localStorage.getItem('claudeKey') || '';
+}
+function getApiKey() {
+  return document.getElementById('apiKeyInput').value.trim();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Papers: file list
+// ═══════════════════════════════════════════════════════
+async function initFiles() {
+  const files = await fetch('/api/files').then(r => r.json()).catch(() => []);
+  const sel = document.getElementById('fileSelect');
+  sel.innerHTML = '';
+  if (!files.length) { sel.innerHTML = '<option value="">暂无数据</option>'; return; }
+  files.forEach(f => {
+    const o = document.createElement('option');
+    o.value = f.filename; o.textContent = f.label; sel.appendChild(o);
+  });
+  loadPapers(files[0].filename);
+}
+
+async function loadPapers(filename) {
+  if (!filename) return;
+  const data = await fetch(`/api/papers/${encodeURIComponent(filename)}`).then(r => r.json()).catch(() => []);
+  allPapers = Array.isArray(data) ? data : [];
+  buildChips();
+  setDateRange(allPapers);
+  applyFilter();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Papers: source chips
+// ═══════════════════════════════════════════════════════
+const SRC_COLORS = {arxiv:'#1565C0',acl:'#2E7D32',openreview:'#6A1B9A',paperscool:'#E65100'};
+function srcColor(s) { return SRC_COLORS[s.split(':')[0]] || '#555'; }
+
+function buildChips() {
+  const srcs = [...new Set(allPapers.map(p => p.source))].sort();
+  activeChips = new Set(srcs);
+  const el = document.getElementById('sourceChips');
+  el.innerHTML = '';
+  srcs.forEach(s => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = s;
+    b.style.background = srcColor(s); b.dataset.src = s;
+    b.onclick = () => { b.classList.toggle('off'); activeChips.has(s)?activeChips.delete(s):activeChips.add(s); applyFilter(); };
+    el.appendChild(b);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  Papers: filter + render
+// ═══════════════════════════════════════════════════════
+function scheduleFilter() { clearTimeout(filterTimer); filterTimer = setTimeout(applyFilter, 120); }
+
+function applyFilter() {
+  const q    = document.getElementById('searchInput').value.toLowerCase().trim();
+  const from = document.getElementById('dateFrom').value;   // "YYYY-MM-DD" or ""
+  const to   = document.getElementById('dateTo').value;
+  shownPapers = allPapers.filter(p => {
+    if (!activeChips.has(p.source)) return false;
+    const pub = (p.published||'').slice(0,10);
+    if (from && pub && pub < from) return false;
+    if (to   && pub && pub > to)   return false;
+    if (!q) return true;
+    return [p.title,...(p.authors||[]),p.abstract].join(' ').toLowerCase().includes(q);
+  });
+  renderPapers();
+}
+
+function clearDates() {
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value   = '';
+  applyFilter();
+}
+
+function setDateRange(papers) {
+  const dates = papers.map(p=>(p.published||'').slice(0,10)).filter(Boolean).sort();
+  if (!dates.length) return;
+  document.getElementById('dateFrom').value = dates[0];
+  document.getElementById('dateTo').value   = dates[dates.length-1];
+}
+
+function renderPapers() {
+  updateCountBadge();
+  const list = document.getElementById('papersList');
+  if (!shownPapers.length) {
+    list.innerHTML = '<div class="empty-state"><div class="eicon">🔍</div>没有匹配的论文</div>'; return;
+  }
+  list.innerHTML = shownPapers.map((p,i) => paperCard(p,i)).join('');
+}
+
+function updateCountBadge() {
+  if (currentTab==='papers') document.getElementById('countBadge').textContent = shownPapers.length+'篇';
+}
+
+function paperCard(p, i) {
+  const color  = srcColor(p.source);
+  const authors = p.authors||[];
+  const auth   = authors.slice(0,3).join(', ')+(authors.length>3?` 等${authors.length}人`:'');
+  const abs    = p.abstract||'';
+  const SHORT  = 220;
+  const absHtml = abs.length>SHORT
+    ? `<span class="abs-s">${esc(abs.slice(0,SHORT))}… <button class="btn-expand" onclick="toggleAbs(${i},this)">展开▾</button></span>
+       <span class="abs-f" style="display:none">${esc(abs)}<button class="btn-expand" onclick="toggleAbs(${i},this)" style="margin-left:4px">收起▴</button></span>`
+    : esc(abs);
+  const sumHtml = p.summary
+    ? `<div class="ai-sum visible" id="sum-${i}"><div class="ai-sum-label">✨ AI摘要</div>${esc(p.summary)}</div>`
+    : `<div class="ai-sum" id="sum-${i}"></div>`;
+  return `
+<div class="card" style="border-left-color:${color}" id="card-${i}">
+  <div class="card-meta">
+    <span class="sbadge" style="background:${color}">${esc(p.source)}</span>
+    <span class="card-date">${esc(p.published||'')}</span>
+  </div>
+  <a class="card-title" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a>
+  <div class="card-authors">${esc(auth)}</div>
+  <div class="card-abstract">${absHtml}</div>
+  <div class="card-actions">
+    <a class="btn-sm" href="${esc(p.pdf_url)}" target="_blank" rel="noopener">PDF</a>
+    <a class="btn-sm" href="${esc(p.url)}"     target="_blank" rel="noopener">摘要页</a>
+    <button class="btn-ai" id="aibtn-${i}" onclick="aiSummarize(${i})">✨ AI摘要</button>
+  </div>
+  ${sumHtml}
+</div>`;
+}
+
+function toggleAbs(i, btn) {
+  const card = document.getElementById(`card-${i}`);
+  const s = card.querySelector('.abs-s'), f = card.querySelector('.abs-f');
+  if (!s||!f) return;
+  const collapsed = s.style.display!=='none';
+  s.style.display = collapsed?'none':'';
+  f.style.display = collapsed?'':'none';
+}
+
+// ═══════════════════════════════════════════════════════
+//  AI per-paper summarize
+// ═══════════════════════════════════════════════════════
+async function aiSummarize(i) {
+  const paper = shownPapers[i];
+  const key   = getApiKey();
+  const btn   = document.getElementById(`aibtn-${i}`);
+  const sumEl = document.getElementById(`sum-${i}`);
+  if (!key) { alert('请先在顶部输入 Claude API Key'); return; }
+  btn.disabled=true; btn.textContent='生成中…';
+  sumEl.innerHTML='<div class="ai-sum-label">✨ AI摘要</div>生成中…'; sumEl.classList.add('visible');
+  const res = await fetch('/api/summarize',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({api_key:key,title:paper.title,abstract:paper.abstract})}).then(r=>r.json()).catch(e=>({error:e.message}));
+  if (res.error) {
+    sumEl.innerHTML=`<div class="ai-sum-label">⚠️ 出错</div>${esc(res.error)}`;
+    btn.disabled=false; btn.textContent='✨ AI摘要';
+  } else {
+    sumEl.innerHTML=`<div class="ai-sum-label">✨ AI摘要</div>${esc(res.summary)}`;
+    btn.textContent='✅ 已摘要';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Report: file list + latest/history toggle
+// ═══════════════════════════════════════════════════════
+let _reportFiles = [];
+
+async function initReports() {
+  _reportFiles = await fetch('/api/reports').then(r=>r.json()).catch(()=>[]);
+  ['histSelect','histSelect2'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '';
+    if (!_reportFiles.length) {
+      sel.innerHTML = '<option value="">暂无报告</option>';
+    } else {
+      _reportFiles.forEach(f => {
+        const o = document.createElement('option');
+        o.value = f.filename; o.textContent = f.label;
+        sel.appendChild(o);
+      });
+    }
+  });
+  switchToLatest();
+}
+
+function switchToLatest() {
+  ['btnLatest','btnLatest2'].forEach(id => { const b=document.getElementById(id); if(b){b.classList.add('active');} });
+  ['btnHistory','btnHistory2'].forEach(id => { const b=document.getElementById(id); if(b) b.classList.remove('active'); });
+  ['histSelect','histSelect2'].forEach(id => { const s=document.getElementById(id); if(s) s.style.display='none'; });
+  if (_reportFiles.length) loadReport(_reportFiles[0].filename);
+}
+
+function switchToHistory() {
+  ['btnHistory','btnHistory2'].forEach(id => { const b=document.getElementById(id); if(b) b.classList.add('active'); });
+  ['btnLatest','btnLatest2'].forEach(id => { const b=document.getElementById(id); if(b) b.classList.remove('active'); });
+  ['histSelect','histSelect2'].forEach(id => { const s=document.getElementById(id); if(s) s.style.display=''; });
+  const sel = document.getElementById('histSelect2');
+  if (sel && sel.value) loadReport(sel.value);
+}
+
+async function loadReport(filename) {
+  if (!filename) return;
+  const r = await fetch(`/api/reports/${encodeURIComponent(filename)}`).then(r=>r.json()).catch(()=>null);
+  if (!r||r.error) return;
+  renderReport(r);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Report: render
+// ═══════════════════════════════════════════════════════
+function renderReport(r) {
+  document.getElementById('reportHowto').style.display = 'none';
+  const main = document.getElementById('reportMain');
+  main.style.display = 'flex';
+
+  const themes    = r.themes||[];
+  const tops      = r.top_papers||[];
+  // 新 schema: 单 ideas 列表；老 schema: research_opportunities + idea_sparks
+  const ideasNew  = r.ideas || null;
+  const opps      = r.research_opportunities||[];
+  const sparks    = r.idea_sparks||[];
+  const allIdeas  = ideasNew || [...opps, ...sparks];
+  const se        = r.se_spotlight||null;
+  const landscape = r.landscape||[];
+
+  main.innerHTML = `
+    ${statsRow(r, themes, opps, sparks, allIdeas)}
+    ${execCard(r.executive_summary||'')}
+    ${se ? seSpotlightCard(se) : ''}
+    ${landscape.length ? `<div>
+      <div class="section-title">🗺️ 子场景格局图</div>
+      <div class="landscape-grid">${landscape.map(ls=>landscapeCard(ls)).join('')}</div>
+    </div>` : ''}
+    <div>
+      <div class="section-title">🔥 热点主题</div>
+      <div class="themes-grid">${themes.map(t=>themeCard(t,Math.max(...themes.map(x=>x.count_estimate||0),1))).join('')}</div>
+    </div>
+    <div>
+      <div class="section-title">⭐ 精选论文</div>
+      <div class="top-papers-list">${tops.map((p,i)=>topPaperRow(p,i+1)).join('')}</div>
+    </div>
+    ${ideasNew ? `
+    <div>
+      <div class="section-title">💡 Ideas（${allIdeas.length}）</div>
+      <div class="ideas-grid">${allIdeas.map(idea=>ideaCard(idea)).join('')}</div>
+    </div>` : `
+    <div>
+      <div class="section-title">💡 研究机会（旧 schema）</div>
+      <div class="opp-list">${opps.map((o,i)=>oppCard(o,i)).join('')}</div>
+    </div>
+    <div>
+      <div class="section-title">🚀 Idea 火花（旧 schema）</div>
+      <div class="ideas-grid">${sparks.map(idea=>ideaCard(idea)).join('')}</div>
+    </div>`}`;
+}
+
+function landscapeCard(ls) {
+  const matLabel = {saturated:'饱和',active:'活跃',emerging:'新兴',blank:'空白'};
+  const mat = ls.maturity||'active';
+  const note = ls.saturation_reason
+    ? `⚠️ ${ls.saturation_reason}`
+    : ls.opportunity ? `💡 ${ls.opportunity}` : '';
+  return `<div class="ls-card">
+    <div class="ls-header">
+      <span class="ls-scenario">${esc(ls.scenario)}</span>
+      <span class="ls-badge mat-${mat}">${matLabel[mat]||mat}</span>
+    </div>
+    <div class="ls-count">${ls.paper_count||0} 篇论文</div>
+    <div class="ls-summary">${esc(ls.summary||'')}</div>
+    ${note ? `<div class="ls-note">${esc(note)}</div>` : ''}
+  </div>`;
+}
+
+function seSpotlightCard(se) {
+  const subs = (se.subtopics||[]).map(s => {
+    const pps = (s.papers||[]).map(p =>
+      `<a class="se-tp-link" href="${esc(p.url)}" target="_blank" rel="noopener"
+        title="${esc(p.title)}">▸ ${esc(p.title.slice(0,48))}${p.title.length>48?'…':''}</a>`
+    ).join('');
+    return `<div class="se-sub">
+      <div class="se-sub-name">${esc(s.name)}<span class="se-sub-count">${s.paper_count||0}篇</span></div>
+      <div class="se-sub-hi">${esc(s.highlights||'')}</div>
+      ${pps?`<div class="se-sub-papers">${pps}</div>`:''}
+    </div>`;
+  }).join('');
+  return `<div class="se-spotlight">
+    <div class="se-spotlight-header">
+      <span style="font-size:18px">🛠️</span>
+      <span style="font-size:14px;font-weight:700;color:#7dd3fc">软件工程专项</span>
+      <span class="se-badge">SE Spotlight</span>
+    </div>
+    <div class="se-summary">${esc(se.summary||'')}</div>
+    ${subs?`<div class="se-subtopics">${subs}</div>`:''}
+  </div>`;
+}
+
+function statsRow(r, themes, opps, sparks, allIdeas) {
+  // New schema: single ideas list. Old schema: opps + sparks.
+  const ideas = allIdeas || [...(opps||[]), ...(sparks||[])];
+  const isNew = !!(r.ideas);
+  const total = r.total_papers || r.total_scanned || 0;
+  const matched = r.total_matched != null ? `<div class="stat-card"><div class="stat-num" style="color:#06b6d4">${r.total_matched}</div><div class="stat-label">命中论文</div></div>` : '';
+  // 统计 contribution_form 分布
+  let formStats = '';
+  if (isNew && ideas.length) {
+    const cf = {new_problem:0, new_solution:0, better_solution:0};
+    ideas.forEach(i => { const c = i.idea && i.idea.contribution_form; if (c in cf) cf[c]++; });
+    formStats = `<div class="stat-card"><div class="stat-num" style="color:#d97706">${cf.new_problem}/${cf.new_solution}/${cf.better_solution}</div><div class="stat-label">新问题/新方法/更优</div></div>`;
+  }
+  return `<div class="stats-row">
+    <div class="stat-card"><div class="stat-num" style="color:#0969da">${total}</div><div class="stat-label">论文总数</div></div>
+    ${matched}
+    <div class="stat-card"><div class="stat-num" style="color:#8b5cf6">${themes.length}</div><div class="stat-label">热点主题</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#22c55e">${ideas.length}</div><div class="stat-label">${isNew ? 'Ideas' : '研究机会+火花'}</div></div>
+    ${formStats}
+  </div>`;
+}
+
+function execCard(text) {
+  return `<div class="exec-card">
+    <div class="exec-title">📋 研究全景</div>
+    <div class="exec-text">${esc(text)}</div>
+  </div>`;
+}
+
+function themeCard(t, maxCount) {
+  const tColors = {hot:'#ef4444',rising:'#22c55e',stable:'#9ca3af'};
+  const tIcons  = {hot:'🔥',rising:'📈',stable:'→'};
+  const c   = tColors[t.trend]||'#9ca3af';
+  const ico = tIcons[t.trend]||'—';
+  const pct = Math.round(((t.count_estimate||0)/maxCount)*100);
+  const kws = (t.keywords||[]).map(k=>`<span class="kw">${esc(k)}</span>`).join('');
+  const pps = (t.papers||[]).map(p=>`<a class="tp-link" href="${esc(p.url)}" target="_blank" rel="noopener"
+    title="${esc(p.title)}">▸ ${esc(p.title.slice(0,45))}${p.title.length>45?'…':''}</a>`).join('');
+  return `<div class="theme-card" style="border-top-color:${c}">
+    <div class="theme-header">
+      <span class="theme-name">${esc(t.name)}</span>
+      <span class="theme-trend" style="color:${c}">${ico} ${t.trend}</span>
+    </div>
+    <div class="theme-bar-wrap">
+      <div class="theme-bar" style="width:${pct}%;background:${c}"></div>
+      <span class="theme-count">~${t.count_estimate}篇</span>
+    </div>
+    <p class="theme-desc">${esc(t.description)}</p>
+    <div class="theme-keywords">${kws}</div>
+    ${pps?`<div class="theme-papers">${pps}</div>`:''}
+  </div>`;
+}
+
+function topPaperRow(p, n) {
+  const color = srcColor((p.source||''));
+  return `<div class="top-paper-row">
+    <div class="tp-num">${n}</div>
+    <div class="tp-body">
+      <a class="tp-title" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a>
+      <div class="tp-meta"><span class="sbadge" style="background:${color};font-size:10px;padding:1px 6px">${esc(p.source)}</span> &nbsp;${esc(p.published||'')}</div>
+      ${(p.reason||p.why_notable)?`<div class="tp-reason">${esc(p.reason||p.why_notable)}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function oppCard(o, i) {
+  // 兼容新结构（feasibility/novelty 是对象）与老结构（字符串）
+  const feasLevel = (o.feasibility && typeof o.feasibility === 'object')
+    ? (o.feasibility.feasibility_level || 'medium')
+    : null;
+  // 难度 = 可行性反向；老结构直接用 o.difficulty
+  const difficulty = o.difficulty || ({high:'low', medium:'medium', low:'high'}[feasLevel]) || 'medium';
+  const diffClass = `diff-${difficulty}`;
+  const diffText  = {high:'高难度',medium:'中难度',low:'低难度'}[difficulty] || '中难度';
+  // 新颖性：新结构 novelty 是对象 (含 novelty_type)，老结构是字符串
+  let novText = '', novClass = 'nov-medium';
+  if (o.novelty && typeof o.novelty === 'object') {
+    const ntMap = {unsolved_problem:'未解决', research_gap:'研究空白', better_solution:'更好方案'};
+    novText = ntMap[o.novelty.novelty_type] || '';
+    novClass = 'nov-high';
+  } else if (typeof o.novelty === 'string') {
+    novClass = `nov-${o.novelty}`;
+    novText  = {high:'高新颖',medium:'中新颖',low:'一般'}[o.novelty] || '';
+  }
+  const pps = (o.papers||[]).map(p=>`<a class="tp-link" href="${esc(p.url)}" target="_blank" rel="noopener"
+    title="${esc(p.title)}">▸ ${esc(p.title.slice(0,50))}…</a>`).join('');
+  return `<div class="opp-card">
+    <div class="opp-header" onclick="toggleOpp(${i})">
+      <span class="opp-icon">💡</span>
+      <span class="opp-title">${esc(o.title||o.area||'')}</span>
+      <div class="opp-badges">
+        ${(o.is_se_related||o.is_se_relevant)?'<span class="se-badge-tag">SE</span>':''}
+        <span class="badge-pill ${diffClass}">${diffText}</span>
+        <span class="badge-pill ${novClass}">${novText}</span>
+      </div>
+      <span class="chevron open" id="chev-${i}">›</span>
+    </div>
+    <div class="opp-body open" id="opp-body-${i}">
+      ${renderStrategyRow(o)}
+      ${renderCoreClaim(o)}
+      ${(o.idea && o.idea.description)?renderIdeaDesc(o):''}
+      ${(o.background||(!o.idea && o.description))?`<div class="opp-row"><span class="opp-row-label">背景</span><span class="opp-row-val">${esc(o.background||o.description||'')}</span></div>`:''}
+      ${o.gap?`<div class="opp-row"><span class="opp-row-label">空白</span><span class="opp-row-val">${esc(o.gap)}</span></div>`:''}
+      ${o.direction?`<div class="opp-row"><span class="opp-row-label">方向</span><span class="opp-row-val"><strong>${esc(o.direction)}</strong></span></div>`:''}
+      ${renderMotivation(o)}
+      ${renderSignal(o.motivation || o)}
+      ${renderNovelty(o)}
+      ${renderFeasibility(o)}
+      ${renderEvaluation(o)}
+      ${renderFiner(o)}
+      ${renderStressTest(o)}
+      ${renderAiFailureMode(o)}
+      ${renderRQs(o)}
+      ${renderStudyDesign(o)}
+      ${renderScoreGrid(o)}
+      ${renderPriorArtCheck(o)}
+      ${renderFormula(o)}
+      ${renderLegacyExperiments(o)}
+      ${o.differentiation?`<div class="idea-diff"><div class="idea-diff-title">✦ 差异化方向</div>${esc(o.differentiation)}</div>`:''}
+      ${pps?`<div class="opp-papers">${pps}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function toggleOpp(i) {
+  document.getElementById(`opp-body-${i}`).classList.toggle('open');
+  document.getElementById(`chev-${i}`).classList.toggle('open');
+}
+
+// ─── Shared renderers for methodology fields ────────────────
+// New claim-driven strategies (preferred)
+const STRATEGY_LABEL = {
+  phenomenon_discovery:'现象发现', assumption_break:'假设证伪',
+  ecosystem_distortion:'生态失真', hidden_failure_mode:'隐藏失败模式',
+  new_problem_class:'新问题类',
+  // legacy (deprecated trigger-driven) — still rendered for old reports
+  distortion:'失真信号(旧)', measurement_gap:'测量空白(旧)',
+  affordance:'新Affordance(旧)', bottleneck:'瓶颈/失败(旧)',
+  surprise:'Surprise(旧)', cross_transfer:'⚠跨域迁移(旧)'
+};
+function renderStrategyRow(o) {
+  const parts = [];
+  const strat = o.strategy || o.generation_strategy;
+  if (strat) {
+    const lbl = STRATEGY_LABEL[strat] || strat;
+    const cls = (o.strategy ? 'idea-strategy-tag-new' : 'idea-strategy-tag-legacy');
+    parts.push(`<span class="idea-strategy-tag ${cls}">${esc(lbl)}</span>`);
+  }
+  // method_type + contribution_form badges (new axis A/B)
+  const mt = o.idea && o.idea.method_type;
+  if (mt && METHOD_TYPE_LABEL[mt]) {
+    const t = METHOD_TYPE_LABEL[mt];
+    parts.push(`<span class="idea-axis-tag ${t.cls}" title="${esc(mt)}">${t.icon} ${esc(t.label)}</span>`);
+  }
+  const cf = o.idea && o.idea.contribution_form;
+  if (cf && CONTRIB_FORM_LABEL[cf]) {
+    const t = CONTRIB_FORM_LABEL[cf];
+    parts.push(`<span class="idea-axis-tag ${t.cls}" title="${esc(t.hint)}">${t.icon} ${esc(t.label)}</span>`);
+  }
+  // FINER 优先（新），score_5d 回退（旧）
+  if (o.finer && (o.finer.average !== undefined && o.finer.average !== null)) {
+    const avgNum = parseFloat(o.finer.average);
+    const cls = avgNum >= 4 ? 'high' : (avgNum >= 3 ? 'mid' : 'low');
+    parts.push(`<span class="idea-score-pill ${cls}" title="FINER 平均分（Feasible/Interesting/Novel/Ethical/Relevant）">FINER ${o.finer.average}/5</span>`);
+  } else if (o.score_5d && typeof o.score_5d.total === 'number') {
+    const t = o.score_5d.total;
+    const cls = t>=20 ? 'high' : (t>=18 ? 'mid' : 'low');
+    parts.push(`<span class="idea-score-pill ${cls}" title="5维评分：影响/新颖/洞察/可行/评估（旧）">${t}/25 (旧)</span>`);
+  }
+  if (o.prior_art_risk) {
+    parts.push(`<span class="idea-prior-art-risk par-${esc(o.prior_art_risk)}">prior art: ${esc(o.prior_art_risk)}</span>`);
+  }
+  return parts.length ? `<div class="idea-strategy-row">${parts.join('')}</div>` : '';
+}
+const FTYPE_LABEL = {
+  hypothesis:        { icon: '🧪', label: '假设 (Hypothesis)', cls: 'ftype-hypothesis', hint: '可测的预测命题，做完实验后会变成 claim' },
+  research_question: { icon: '❓', label: '研究问题 (RQ)',     cls: 'ftype-rq',         hint: '开放问题，不预测答案' },
+  proposed_construct:{ icon: '🏗', label: '新概念 (Construct)', cls: 'ftype-construct',  hint: '提出一个新的概念/分类/威胁模型' }
+};
+const METHOD_TYPE_LABEL = {
+  empirical_study:        { icon: '📊', label: '实证研究 (Empirical)',  cls: 'mtype-empirical' },
+  technical_contribution: { icon: '⚙', label: '技术贡献 (Technical)',  cls: 'mtype-technical' },
+  theoretical:            { icon: '∑', label: '理论 (Theoretical)',     cls: 'mtype-theoretical' },
+  vision_position:        { icon: '📡', label: '观点 (Vision)',         cls: 'mtype-vision' }
+};
+const CONTRIB_FORM_LABEL = {
+  new_problem:     { icon: '🆕', label: '新问题 (New Problem)',   cls: 'cform-new-problem',  hint: '首次定义/命名/formulate 一个问题（最稳）' },
+  new_solution:    { icon: '🛠', label: '新方法 (New Solution)',  cls: 'cform-new-solution', hint: '已有问题的新方法 + 显著 insight' },
+  better_solution: { icon: '🔧', label: '更优方案 (Better)',      cls: 'cform-better',       hint: '已有问题更好 motivation + 方案（最 incremental）' }
+};
+function renderCoreClaim(o) {
+  // 新优先级：o.idea.one_liner → o.idea.formulation → o.idea.core_claim → o.core_claim
+  const idea = o.idea || {};
+  const text = idea.one_liner || idea.formulation || idea.core_claim || o.core_claim;
+  if (!text) return '';
+  const ft = idea.formulation_type;
+  let typeBadge = '';
+  if (ft && FTYPE_LABEL[ft]) {
+    const t = FTYPE_LABEL[ft];
+    typeBadge = `<span class="idea-ftype-badge ${t.cls}" title="${t.hint}">${t.icon} ${esc(t.label)}</span>`;
+  }
+  // 新结构（one_liner）用大字显眼展示；老结构（formulation/core_claim）用旧样式
+  const isOneLiner = !!idea.one_liner;
+  if (isOneLiner) {
+    return `<div class="idea-one-liner-block">
+      <div class="idea-one-liner-header">
+        <span class="idea-one-liner-label">💡 Idea（一句话）</span>
+        ${typeBadge}
+      </div>
+      <div class="idea-one-liner-text" title="一句话 idea 主体">${esc(text)}</div>
+    </div>`;
+  }
+  // legacy 渲染（旧报告）
+  return `<div class="idea-core-claim">${typeBadge ? typeBadge + ' ' : ''}<b title="我们要研究的命题/问题/概念">🎯 想法主体（旧版）：</b>${esc(text)}</div>`;
+}
+function renderIdeaDesc(o) {
+  // 新：o.idea.approach；中间：o.idea.description；老：顶层 o.description
+  const d = (o.idea && (o.idea.approach || o.idea.description)) || o.description;
+  return d ? `<div class="idea-desc"><b style="color:#475569;font-size:11px">📋 怎么做 (Approach)：</b><br>${esc(d)}</div>` : '';
+}
+function renderEvaluation(o) {
+  // 新结构 o.evaluation; 老结构 top-level expected_findings / null_result
+  const ev = o.evaluation || {};
+  const ef = ev.expected_findings || o.expected_findings;
+  const nr = ev.null_result || o.null_result;
+  if (!ef && !nr) return '';
+  let html = `<div class="idea-eval-block"><div class="idea-eval-header">🔬 Evaluation（量化预测）</div>`;
+  if (ef) html += `<div class="idea-expected"><b>📈 Expected Findings (若成立)：</b>${esc(ef)}</div>`;
+  if (nr) html += `<div class="idea-null"><b>📉 Null Result (若不成立)：</b>${esc(nr)}</div>`;
+  html += `</div>`;
+  return html;
+}
+const NOVELTY_LABEL = {
+  unsolved_problem: '🆕 未解决的问题',
+  research_gap:     '🕳 研究空白 (Gap)',
+  better_solution:  '⚡ 更好的解决方案'
+};
+function renderMotivation(o) {
+  const m = o.motivation;
+  if (!m) return '';
+  let html = '';
+  if (m.why_matters) html += `<div class="idea-why-matters"><b>💡 Why Matters：</b>${esc(m.why_matters)}</div>`;
+  // signal 可能在 motivation 内或老结构外
+  return html;
+}
+function renderNovelty(o) {
+  const n = o.novelty;
+  if (!n) return '';
+  const ntype = n.novelty_type;
+  const nLabel = NOVELTY_LABEL[ntype] || ntype || '';
+  let html = `<div class="idea-novelty-block"><div class="idea-novelty-header">${esc(nLabel)}</div>`;
+  if (n.statement) html += `<div class="idea-novelty-stmt">${esc(n.statement)}</div>`;
+  if (n.closest_prior_work && n.closest_prior_work.length) {
+    html += `<div class="idea-prior-list"><div class="idea-prior-list-title">📚 Closest Prior Work</div>`;
+    n.closest_prior_work.forEach(pa => {
+      html += `<div class="idea-prior-item">`;
+      if (pa.url) html += `<a href="${esc(pa.url)}" target="_blank" rel="noopener">▸ ${esc(pa.title)}</a>`;
+      else html += `<span>▸ ${esc(pa.title||'')}</span>`;
+      if (pa.what_they_did) html += `<div class="idea-prior-detail"><span class="lbl">他们：</span>${esc(pa.what_they_did)}</div>`;
+      if (pa.what_we_dont_do) html += `<div class="idea-prior-detail"><span class="lbl">我们不做：</span>${esc(pa.what_we_dont_do)}</div>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+  }
+  if (n.delta_over_prior) html += `<div class="idea-delta"><b>Δ Delta：</b>${esc(n.delta_over_prior)}</div>`;
+  html += `</div>`;
+  return html;
+}
+function renderFeasibility(o) {
+  const f = o.feasibility;
+  if (!f || typeof f !== 'object') return '';
+  let html = `<div class="idea-feas-block"><div class="idea-feas-header">🛠 Feasibility</div>`;
+  if (f.data_source)     html += `<div class="idea-feas-row"><span class="lbl">数据：</span>${esc(f.data_source)}</div>`;
+  if (f.effort_estimate) html += `<div class="idea-feas-row"><span class="lbl">工作量：</span>${esc(f.effort_estimate)}</div>`;
+  if (f.key_risks && f.key_risks.length) html += `<div class="idea-feas-row"><span class="lbl">风险：</span>${f.key_risks.map(r => esc(r)).join(' / ')}</div>`;
+  html += `</div>`;
+  return html;
+}
+function renderSignal(o) {
+  if (!o.signal) return '';
+  const sum = o.signal.summary || '';
+  const sps = (o.signal.source_papers||[]).map(p =>
+    `<a href="${esc(p.url)}" target="_blank" rel="noopener" style="color:#1e40af;text-decoration:none">▸ ${esc((p.title||'').slice(0,48))}${(p.title||'').length>48?'…':''}</a>`
+  ).join('<br>');
+  if (!sum && !sps) return '';
+  return `<div class="idea-signal"><b title="今日哪篇论文/哪个反常让我们想到这个 idea">📡 触发信号 (今日哪篇论文/反常激发了这个 idea)：</b>${esc(sum)}${sps?'<br>'+sps:''}</div>`;
+}
+function renderRQs(o) {
+  if (!o.research_questions || !o.research_questions.length) return '';
+  const items = o.research_questions.map(q => `<li>${esc(q)}</li>`).join('');
+  return `<div class="idea-rqs"><div class="idea-rqs-title">❓ Research Questions</div><ul class="idea-rqs-list">${items}</ul></div>`;
+}
+function renderStudyDesign(o) {
+  // 仅渲染老 study_design（legacy）。expected_findings + null_result 已由 renderEvaluation 处理
+  if (!o.study_design) return '';
+  return `<div class="idea-study"><b>🔬 Study Design (旧)：</b>${esc(o.study_design)}</div>`;
+}
+function renderFormula(o) {
+  // legacy: only render if present (old reports)
+  if (!o.golden_formula) return '';
+  const f = o.golden_formula;
+  const rows = [
+    ['Trend', f.trend], ['假设破', f.assumption_violated],
+    ['Insight', f.insight], ['Design', f.design], ['Eval', f.evaluation]
+  ].filter(([_,v]) => v && v.trim());
+  if (rows.length === 0) return '';
+  return `<div class="idea-formula">${rows.map(([k,v]) =>
+    `<div class="idea-formula-row"><span class="idea-formula-key">${k}</span><span class="idea-formula-val">${esc(v)}</span></div>`).join('')}</div>`;
+}
+function renderScoreGrid(o) {
+  if (!o.score_5d) return '';
+  const s = o.score_5d;
+  const cells = [
+    ['影响', s.impact], ['新颖', s.novelty], ['洞察', s.insight],
+    ['可行', s.feasibility], ['评估', s.eval_clarity]
+  ].filter(([_,v]) => typeof v === 'number');
+  if (cells.length === 0) return '';
+  return `<div class="idea-score-grid">${cells.map(([k,v]) =>
+    `<div class="idea-score-cell">${k}<b>${v}</b></div>`).join('')}</div>`;
+}
+function renderFiner(o) {
+  if (!o.finer) return '';
+  const f = o.finer;
+  const cells = [
+    ['可行', 'Feasible',    f.feasible],
+    ['有趣', 'Interesting', f.interesting],
+    ['新颖', 'Novel',       f.novel],
+    ['伦理', 'Ethical',     f.ethical],
+    ['相关', 'Relevant',    f.relevant]
+  ].filter(([_,__,v]) => typeof v === 'number');
+  if (cells.length === 0) return '';
+  const avg = (typeof f.average === 'number' || typeof f.average === 'string') ? f.average : '';
+  const avgNum = parseFloat(avg);
+  const avgPass = !isNaN(avgNum) && avgNum >= 3.0;
+  return `<div class="idea-finer-block">
+    <div class="idea-finer-header">📐 FINER Score${avg !== '' ? ` <span class="idea-finer-avg ${avgPass?'pass':'fail'}">平均 ${avg}/5</span>` : ''}</div>
+    <div class="idea-finer-grid">${cells.map(([zh, en, v]) => {
+      const cls = v >= 4 ? 'high' : (v >= 3 ? 'mid' : (v >= 2 ? 'low' : 'fail'));
+      return `<div class="idea-finer-cell ${cls}" title="${en}"><span class="label">${zh}</span><b>${v}</b></div>`;
+    }).join('')}</div>
+  </div>`;
+}
+const FALLACY_LABEL = {
+  confirmation_bias: '确认偏差',
+  hasty_generalization: '草率泛化',
+  cherry_picking: '挑樱桃',
+  survivorship_bias: '幸存者偏差',
+  ecological_fallacy: '生态谬误',
+  none: '无'
+};
+function renderStressTest(o) {
+  if (!o.stress_test) return '';
+  const s = o.stress_test;
+  let html = `<div class="idea-stress-block"><div class="idea-stress-header">🛡 Stress Test</div>`;
+  if (s.strongest_counter) html += `<div class="idea-stress-row"><span class="lbl">最强反对：</span>${esc(s.strongest_counter)}</div>`;
+  if (s.biggest_confound) html += `<div class="idea-stress-row"><span class="lbl">最大 confound：</span>${esc(s.biggest_confound)}</div>`;
+  if (s.fallacy_risk) {
+    const fr = s.fallacy_risk;
+    const cls = fr === 'none' ? 'pass' : 'warn';
+    const lbl = FALLACY_LABEL[fr] || fr;
+    html += `<div class="idea-stress-row"><span class="lbl">Fallacy 风险：</span><span class="idea-fallacy-tag ${cls}">${esc(lbl)}</span></div>`;
+  }
+  if (s.preprint_risk) {
+    const pr = s.preprint_risk;
+    const cls = pr === 'low' ? 'pass' : (pr === 'medium' ? 'warn' : 'danger');
+    const icon = pr === 'low' ? '✓' : (pr === 'medium' ? '⚠' : '🚨');
+    html += `<div class="idea-stress-row"><span class="lbl">Preprint 风险：</span><span class="idea-preprint-tag ${cls}">${icon} ${esc(pr)}</span>`;
+    if (s.preprint_risk_reason) html += ` <span class="idea-preprint-reason">${esc(s.preprint_risk_reason)}</span>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+function renderAiFailureMode(o) {
+  if (!o.ai_failure_mode_check) return '';
+  const a = o.ai_failure_mode_check;
+  const rows = [
+    ['🐞 Mode 5 Bug-as-Insight', a.bug_as_insight],
+    ['🔒 Mode 7 Frame-Lock', a.frame_lock],
+    ['⚡ Mode 4 Shortcut Risk', a.shortcut_risk]
+  ].filter(([_,v]) => v && v !== 'N/A');
+  if (rows.length === 0) return '';
+  return `<div class="idea-failmode-block">
+    <div class="idea-failmode-header">🔬 AI 失败模式自检 (Lu et al. 2026 Nature)</div>
+    ${rows.map(([k,v]) => `<div class="idea-failmode-row"><span class="lbl">${k}：</span>${esc(v)}</div>`).join('')}
+  </div>`;
+}
+function renderLegacyExperiments(o) {
+  // legacy fields (still rendered for backward compat)
+  let html = '';
+  if (o.falsifying_experiment) html += `<div class="idea-falsifier"><b>🧪 证伪实验(旧)：</b>${esc(o.falsifying_experiment)}</div>`;
+  if (o.kill_criterion)        html += `<div class="idea-kill"><b>☠ 杀手判据(旧)：</b>${esc(o.kill_criterion)}</div>`;
+  return html;
+}
+function renderPriorArtCheck(o) {
+  if (!o.prior_art_check) return '';
+  return `<div class="idea-priorart-check"><b>🔍 Prior-art 预检：</b>${esc(o.prior_art_check)}</div>`;
+}
+
+function ideaCard(idea) {
+  // 兼容新结构 (feasibility 是对象) 与老结构 (feasibility 是字符串)
+  const feas = (idea.feasibility && typeof idea.feasibility === 'object')
+    ? (idea.feasibility.feasibility_level || 'medium')
+    : (idea.feasibility || 'medium');
+  const tagClass = {high:'feas-tag-high',medium:'feas-tag-medium',low:'feas-tag-low'}[feas] || 'feas-tag-medium';
+  const tagText  = {high:'高可行',medium:'中可行',low:'探索性'}[feas] || '中可行';
+  const pps = (idea.papers||[]).map(p =>
+    `<a class="idea-paper-link" href="${esc(p.url)}" target="_blank" rel="noopener"
+      title="${esc(p.title)}">▸ ${esc(p.title.slice(0,52))}${p.title.length>52?'…':''}</a>`
+  ).join('');
+  const priorArt = (idea.prior_art||[]).map(pa =>
+    `<div class="idea-prior-art-item">
+      <a href="${esc(pa.url)}" target="_blank" rel="noopener">▸ ${esc(pa.title)}</a>
+      ${pa.overlap?`<span class="idea-prior-art-overlap">${esc(pa.overlap)}</span>`:''}
+    </div>`
+  ).join('');
+  return `<div class="idea-card idea-feas-${feas}">
+    <div class="idea-header">
+      <div class="idea-title">${esc(idea.title)}</div>
+      <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
+        ${(idea.is_se_related||idea.is_se_relevant)?'<span class="se-badge-tag">SE</span>':''}
+        <span class="idea-feas-tag ${tagClass}">${tagText}</span>
+      </div>
+    </div>
+    ${renderStrategyRow(idea)}
+    ${renderCoreClaim(idea)}
+    ${renderIdeaDesc(idea)}
+    ${renderMotivation(idea)}
+    ${renderSignal(idea.motivation || idea)}
+    ${renderNovelty(idea)}
+    ${renderFeasibility(idea)}
+    ${renderEvaluation(idea)}
+    ${renderFiner(idea)}
+    ${renderStressTest(idea)}
+    ${renderAiFailureMode(idea)}
+    ${renderRQs(idea)}
+    ${renderStudyDesign(idea)}
+    ${renderScoreGrid(idea)}
+    ${renderPriorArtCheck(idea)}
+    ${renderFormula(idea)}
+    ${renderLegacyExperiments(idea)}
+    ${(idea.inspiration||idea.connection)?`<div class="idea-inspi">💡 灵感(旧)：<span>${esc(idea.inspiration||idea.connection)}</span></div>`:''}
+    ${priorArt?`<div class="idea-prior-art"><div class="idea-prior-art-title">⚠ 已有相关工作 (Prior Art)</div>${priorArt}</div>`:''}
+    ${idea.differentiation?`<div class="idea-diff"><div class="idea-diff-title">✦ 差异化方向</div>${esc(idea.differentiation)}</div>`:''}
+    ${idea.novelty_after_review?`<div class="idea-novelty-after"><b>复审后新颖性：</b>${esc(idea.novelty_after_review)}</div>`:''}
+    ${pps?`<div class="idea-papers">${pps}</div>`:''}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  Util
+// ═══════════════════════════════════════════════════════
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════════════
+//  Multi-Terminal
+// ═══════════════════════════════════════════════════════
+let socket;
+let terms = {};        // term_id -> { term, fitAddon, autoScroll }
+let activeTermId = null;
+let _termCounter = 0;
+
+function initTerminal() {
+  socket = io({transports:['websocket']});
+
+  socket.on('connect', () => {
+    const ids = Object.keys(terms);
+    if (ids.length === 0) {
+      newTerminal();
+    } else {
+      ids.forEach(tid => {
+        const s = terms[tid];
+        s.term.reset();
+        s.autoScroll = true;
+        socket.emit('term_start', {term_id: tid, cols: s.term.cols, rows: s.term.rows});
+      });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    Object.values(terms).forEach(s =>
+      s.term.writeln('\r\n\x1b[33m[连接断开，正在重连…]\x1b[0m'));
+  });
+
+  socket.on('term_output', d => {
+    const s = terms[d.term_id];
+    if (!s) return;
+    s.term.write(d.data);
+    if (s.autoScroll) s.term.scrollToBottom();
+  });
+}
+
+function newTerminal() {
+  _termCounter++;
+  const tid = String(_termCounter);
+
+  const body = document.createElement('div');
+  body.className = 'term-body';
+  body.id = `term-body-${tid}`;
+  document.getElementById('termBodies').appendChild(body);
+
+  const term = new Terminal({
+    theme:{background:'#0d1117',foreground:'#c9d1d9',cursor:'#58a6ff',selectionBackground:'#264f78'},
+    fontFamily:'Menlo,Monaco,"Courier New",monospace',
+    fontSize:13, lineHeight:1.4, cursorBlink:true, scrollback:5000,
+    allowProposedApi:true, scrollOnUserInput:true,
+  });
+  const fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  term.open(body);
+
+  const state = {term, fitAddon, autoScroll: true};
+  terms[tid] = state;
+
+  term.onScroll(() => {
+    const atBottom = term.buffer.active.viewportY >= term.buffer.active.length - term.rows;
+    state.autoScroll = atBottom;
+  });
+  term.onData(d => {
+    state.autoScroll = true;
+    socket.emit('term_input', {term_id: tid, data: d});
+  });
+
+  new ResizeObserver(() => {
+    if (body.classList.contains('active')) {
+      fitAddon.fit();
+      socket.emit('term_resize', {term_id: tid, cols: term.cols, rows: term.rows});
+    }
+  }).observe(body);
+
+  _addTab(tid);
+  switchTerminal(tid);
+
+  if (socket && socket.connected) {
+    fitAddon.fit();
+    socket.emit('term_start', {term_id: tid, cols: term.cols, rows: term.rows});
+  }
+}
+
+function _addTab(tid) {
+  const tab = document.createElement('div');
+  tab.className = 'term-tab';
+  tab.id = `term-tab-${tid}`;
+  tab.innerHTML =
+    `<span onclick="switchTerminal('${tid}')">Terminal ${tid}</span>` +
+    `<button class="term-tab-close" onclick="closeTerminal('${tid}')" title="关闭">×</button>`;
+  const addBtn = document.querySelector('.term-add-btn');
+  document.getElementById('termTabs').insertBefore(tab, addBtn);
+}
+
+function switchTerminal(tid) {
+  if (activeTermId) {
+    document.getElementById(`term-body-${activeTermId}`)?.classList.remove('active');
+    document.getElementById(`term-tab-${activeTermId}`)?.classList.remove('active');
+  }
+  activeTermId = tid;
+  const body = document.getElementById(`term-body-${tid}`);
+  document.getElementById(`term-tab-${tid}`)?.classList.add('active');
+  if (body) {
+    body.classList.add('active');
+    requestAnimationFrame(() => {
+      const s = terms[tid];
+      if (s) {
+        s.fitAddon.fit();
+        socket.emit('term_resize', {term_id: tid, cols: s.term.cols, rows: s.term.rows});
+      }
+    });
+  }
+}
+
+function closeTerminal(tid) {
+  if (Object.keys(terms).length <= 1) return;
+  socket.emit('term_close', {term_id: tid});
+  terms[tid]?.term.dispose();
+  delete terms[tid];
+  document.getElementById(`term-body-${tid}`)?.remove();
+  document.getElementById(`term-tab-${tid}`)?.remove();
+  if (activeTermId === tid) {
+    const remaining = Object.keys(terms);
+    activeTermId = null;
+    if (remaining.length) switchTerminal(remaining[remaining.length - 1]);
+  }
+}
+
+function sendCmd(cmd) {
+  if (!activeTermId) return;
+  terms[activeTermId].autoScroll = true;
+  socket.emit('term_input', {term_id: activeTermId, data: cmd});
+}
+
+function termClear() {
+  if (!activeTermId) return;
+  const s = terms[activeTermId];
+  s.term.reset();
+  s.autoScroll = true;
+  socket.emit('term_input', {term_id: activeTermId, data: '\x0c'});
+}
+
+// ═══════════════════════════════════════════════════════
+//  Resizer
+// ═══════════════════════════════════════════════════════
+function initResizer() {
+  const handle   = document.getElementById('resizeHandle');
+  const termPanel = document.getElementById('termPanel');
+  const MIN_W = 180, MAX_RATIO = 0.85;
+
+  // Restore saved width (clamped so it can't consume the full viewport)
+  const saved = localStorage.getItem('termPanelWidth');
+  if (saved) {
+    const w = Math.max(MIN_W, Math.min(window.innerWidth * MAX_RATIO, parseInt(saved, 10)));
+    termPanel.style.width = w + 'px';
+  }
+
+  handle.addEventListener('mousedown', e => {
+    const startX     = e.clientX;
+    const startWidth = termPanel.offsetWidth;
+    handle.classList.add('dragging');
+    document.body.style.cursor      = 'col-resize';
+    document.body.style.userSelect  = 'none';
+
+    function onMove(e) {
+      const dx = startX - e.clientX;   // drag left → wider terminal
+      const newW = Math.max(MIN_W, Math.min(window.innerWidth * MAX_RATIO, startWidth + dx));
+      termPanel.style.width = newW + 'px';
+      refitActiveTerminal();
+    }
+
+    function onUp() {
+      handle.classList.remove('dragging');
+      document.body.style.cursor     = '';
+      document.body.style.userSelect = '';
+      localStorage.setItem('termPanelWidth', termPanel.offsetWidth);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onUp);
+    e.preventDefault();
+  });
+}
+
+function refitActiveTerminal() {
+  if (!activeTermId || !terms[activeTermId]) return;
+  const s = terms[activeTermId];
+  requestAnimationFrame(() => {
+    s.fitAddon.fit();
+    if (socket && socket.connected)
+      socket.emit('term_resize', {term_id: activeTermId, cols: s.term.cols, rows: s.term.rows});
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  File Manager (Browser)
+// ═══════════════════════════════════════════════════════
+let _fbPath     = '';          // current directory path (relative to current root)
+let _fbItems    = [];          // raw items from server
+let _fbSortKey  = 'name';
+let _fbSortAsc  = true;
+let _fbInited   = false;
+let _fbRootIdx  = 0;           // currently selected root index
+let _fbRoots    = [];          // [{id, path, name, is_project}]
+
+async function initBrowserTab() {
+  if (!_fbInited) {
+    _fbInited = true;
+    await _fbLoadRoots();
+    fbNavigate('');
+  }
+}
+
+async function _fbLoadRoots() {
+  _fbRoots = await fetch('/api/roots').then(r => r.json()).catch(() => []);
+  if (!_fbRoots.length) _fbRoots = [{id:0, path:'', name:'项目目录', is_project:true}];
+  const sel = document.getElementById('fbRootSelect');
+  sel.innerHTML = _fbRoots.map(r =>
+    `<option value="${r.id}">${r.is_project ? '📁 ' : '🔗 '}${r.name}</option>`
+  ).join('');
+  sel.value = _fbRootIdx;
+  document.getElementById('fbRemoveBtn').style.display = _fbRootIdx > 0 ? '' : 'none';
+}
+
+function fbSelectRoot(idx) {
+  _fbRootIdx = parseInt(idx);
+  _fbPath = '';
+  document.getElementById('fbRemoveBtn').style.display = _fbRootIdx > 0 ? '' : 'none';
+  fbNavigate('');
+}
+
+async function fbAddRoot() {
+  const raw = prompt('输入目录的绝对路径（支持 ~ 展开）：\n\n已通过 /add-dir 添加的目录会自动出现，无需手动填写。');
+  if (!raw || !raw.trim()) return;
+  const res = await fetch('/api/roots/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({path: raw.trim()}),
+  }).then(r => r.json()).catch(() => null);
+  if (!res || res.error) { alert(res?.error || '添加失败'); return; }
+  await _fbLoadRoots();
+  _fbRootIdx = res.id;
+  document.getElementById('fbRootSelect').value = _fbRootIdx;
+  document.getElementById('fbRemoveBtn').style.display = '';
+  fbNavigate('');
+}
+
+async function fbRemoveRoot() {
+  if (_fbRootIdx === 0) return;
+  const root = _fbRoots[_fbRootIdx];
+  if (!confirm(`从列表中移除「${root?.name || '该目录'}」？\n（仅移除浏览入口，不删除文件）`)) return;
+  const res = await fetch('/api/roots/remove', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: _fbRootIdx}),
+  }).then(r => r.json()).catch(() => null);
+  if (!res || res.error) { alert(res?.error || '移除失败'); return; }
+  _fbRootIdx = 0;
+  await _fbLoadRoots();
+  fbNavigate('');
+}
+
+async function fbNavigate(path) {
+  _fbPath = path;
+  const data = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}&root=${_fbRootIdx}`)
+    .then(r => r.json()).catch(() => []);
+  _fbItems = Array.isArray(data) ? data : [];
+  _fbRenderCrumbs();
+  _fbRenderItems();
+  document.getElementById('fbUpBtn').disabled = !path;
+}
+
+function fbUp() {
+  const parts = _fbPath.split('/').filter(Boolean);
+  parts.pop();
+  fbNavigate(parts.join('/'));
+}
+
+function fbRefresh() { fbNavigate(_fbPath); }
+
+function fbSort(key) {
+  if (_fbSortKey === key) {
+    _fbSortAsc = !_fbSortAsc;
+  } else {
+    _fbSortKey = key;
+    _fbSortAsc = key === 'name' || key === 'type';
+  }
+  _fbRenderItems();
+}
+
+function _fbRenderCrumbs() {
+  const parts   = _fbPath ? _fbPath.split('/').filter(Boolean) : [];
+  const crumbs  = document.getElementById('fbCrumbs');
+  crumbs.innerHTML = '';
+
+  const mkCrumb = (label, path, last) => {
+    const sp = document.createElement('span');
+    sp.className = 'fb-crumb' + (last ? ' fb-last' : '');
+    sp.textContent = label;
+    if (!last) sp.onclick = () => fbNavigate(path);
+    return sp;
+  };
+  const mkSep = () => { const s = document.createElement('span'); s.className='fb-sep'; s.textContent='›'; return s; };
+
+  crumbs.appendChild(mkCrumb('🏠 根目录', '', parts.length === 0));
+  parts.forEach((part, i) => {
+    crumbs.appendChild(mkSep());
+    crumbs.appendChild(mkCrumb(part, parts.slice(0, i + 1).join('/'), i === parts.length - 1));
+  });
+}
+
+function _fbRenderItems() {
+  // Sort
+  const sorted = [..._fbItems].sort((a, b) => {
+    // Directories always first
+    if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+    let va, vb;
+    if (_fbSortKey === 'name') { va = a.name.toLowerCase(); vb = b.name.toLowerCase(); }
+    else if (_fbSortKey === 'type') { va = a.ext; vb = b.ext; }
+    else if (_fbSortKey === 'size') { va = a.size; vb = b.size; }
+    else if (_fbSortKey === 'mtime') { va = a.mtime; vb = b.mtime; }
+    if (va < vb) return _fbSortAsc ? -1 : 1;
+    if (va > vb) return _fbSortAsc ? 1 : -1;
+    return 0;
+  });
+
+  // Update sort arrow indicators
+  ['name','type','size','mtime'].forEach(k => {
+    const el = document.getElementById('fbSort' + k.charAt(0).toUpperCase() + k.slice(1));
+    if (!el) return;
+    el.textContent = _fbSortKey === k ? (_fbSortAsc ? '▲' : '▼') : '';
+    el.closest('th').classList.toggle('sorted', _fbSortKey === k);
+  });
+
+  const tbody = document.getElementById('fbItems');
+  if (!sorted.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="fb-empty">（空目录）</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = '';
+  sorted.forEach(item => {
+    const tr = document.createElement('tr');
+    if (item.is_dir) tr.classList.add('fb-dir');
+
+    const icon    = item.is_dir ? '📁' : fileIcon(item.ext);
+    const typeStr = item.is_dir ? '文件夹' : (item.ext ? item.ext.slice(1).toUpperCase() : '文件');
+    const sizeStr = item.is_dir ? '—' : _fbFmtSize(item.size);
+    const dateStr = _fbFmtDate(item.mtime);
+
+    tr.innerHTML = `
+      <td><div class="fb-name-cell">
+        <span class="fb-item-icon">${icon}</span>
+        <span class="fb-item-name" title="${esc(item.path)}">${esc(item.name)}</span>
+      </div></td>
+      <td class="fb-col-type">${typeStr}</td>
+      <td class="fb-col-size">${sizeStr}</td>
+      <td class="fb-col-date">${dateStr}</td>`;
+
+    if (item.is_dir) {
+      tr.ondblclick = () => fbNavigate(item.path);
+      tr.onclick    = () => {};  // single click: select only (no action)
+    } else {
+      tr.ondblclick = () => _fbOpenInEditor(item.path, item.ext);
+      tr.onclick    = () => _fbSelectRow(tr);
+    }
+
+    tbody.appendChild(tr);
+  });
+}
+
+let _fbSelectedRow = null;
+function _fbSelectRow(tr) {
+  if (_fbSelectedRow) _fbSelectedRow.style.background = '';
+  _fbSelectedRow = tr;
+  tr.style.background = '#dbeafe';
+}
+
+function _fbOpenInEditor(path, ext) {
+  switchTab('editor');
+  _openFile(path, ext, _fbRootIdx);
+}
+
+function _fbFmtSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024)        return bytes + ' B';
+  if (bytes < 1048576)     return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1073741824)  return (bytes / 1048576).toFixed(1) + ' MB';
+  return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
+function _fbFmtDate(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts * 1000);
+  const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const hm  = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  return `${ymd} ${hm}`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  File Editor
+// ═══════════════════════════════════════════════════════
+let monacoEditor  = null;
+let monacoReady   = false;
+let currentFile   = null;   // { path, ext }
+let editorDirty   = false;
+let _pendingFile  = null;   // file to open once Monaco loads
+let _treeCache    = {};     // dirPath -> items[]
+let _treeExpanded = {};     // dirPath -> bool
+
+const EXT_LANG = {
+  '.py':'python', '.js':'javascript', '.ts':'typescript', '.jsx':'javascript',
+  '.tsx':'typescript', '.json':'json', '.jsonl':'json', '.md':'markdown',
+  '.yaml':'yaml', '.yml':'yaml', '.sh':'shell', '.bash':'shell',
+  '.html':'html', '.css':'css', '.sql':'sql', '.xml':'xml',
+  '.toml':'ini', '.ini':'ini', '.txt':'plaintext', '.env':'shell',
+};
+const EXT_ICON = {
+  '.py':'🐍', '.js':'📜', '.ts':'📜', '.jsx':'📜', '.tsx':'📜',
+  '.json':'{}', '.jsonl':'{}', '.md':'📝', '.txt':'📄',
+  '.sh':'⚙', '.bash':'⚙', '.yaml':'⚙', '.yml':'⚙', '.toml':'⚙',
+  '.html':'🌐', '.css':'🎨', '.sql':'🗄', '.xml':'📋',
+};
+
+function fileIcon(ext) { return EXT_ICON[ext] || '📄'; }
+
+// ─── Init ────────────────────────────────────────────────
+function initEditorTab() {
+  if (monacoReady) { refreshFileTree(); return; }
+  if (typeof require !== 'undefined') { _setupMonaco(); return; }
+  document.getElementById('editorPlaceholder').innerHTML =
+    '<span style="font-size:28px">⏳</span><span>正在加载编辑器…</span><span style="font-size:11px;color:#444">首次加载需联网，请稍候</span>';
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js';
+  s.onload = _setupMonaco;
+  s.onerror = () => {
+    document.getElementById('editorPlaceholder').innerHTML =
+      '<span style="font-size:28px">⚠️</span><span>Monaco 编辑器加载失败（需联网）</span><span style="font-size:11px;color:#444">请检查网络连接后刷新页面</span>';
+  };
+  document.head.appendChild(s);
+}
+
+function _setupMonaco() {
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs' } });
+  require(['vs/editor/editor.main'], function() {
+    const container = document.getElementById('monacoContainer');
+    monacoEditor = monaco.editor.create(container, {
+      value: '',
+      language: 'plaintext',
+      theme: 'vs-dark',
+      automaticLayout: true,
+      minimap: { enabled: true },
+      fontSize: 13,
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      lineNumbers: 'on',
+      wordWrap: 'off',
+      scrollBeyondLastLine: false,
+      tabSize: 4,
+      renderWhitespace: 'selection',
+    });
+
+    monacoEditor.onDidChangeModelContent(() => {
+      if (!editorDirty) {
+        editorDirty = true;
+        document.getElementById('editorDirtyDot').classList.add('on');
+        document.getElementById('editorSaveBtn').disabled = false;
+      }
+      _refreshMdPreview();
+    });
+
+    monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveCurrentFile);
+
+    monacoReady = true;
+    const pending = _pendingFile;
+    _pendingFile = null;
+    refreshFileTree().then(() => {
+      if (pending) _openFile(pending.path, pending.ext, pending.rootIdx || 0);
+    });
+  });
+}
+
+// ─── File tree ────────────────────────────────────────────
+async function refreshFileTree() {
+  _treeCache = {};
+  await _loadDir('');
+  _renderTree();
+}
+
+async function _loadDir(path) {
+  const items = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`)
+    .then(r => r.json()).catch(() => []);
+  _treeCache[path] = Array.isArray(items) ? items : [];
+}
+
+function _renderTree() {
+  const container = document.getElementById('editorTree');
+  container.innerHTML = '';
+  _renderLevel('', 0, container);
+}
+
+function _renderLevel(dirPath, depth, container) {
+  const items = _treeCache[dirPath] || [];
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'tree-item' + (item.is_dir ? ' is-dir' : '') +
+      (currentFile && item.path === currentFile.path ? ' active' : '');
+    div.style.paddingLeft = (6 + depth * 14) + 'px';
+
+    const icon = item.is_dir
+      ? (_treeExpanded[item.path] ? '📂' : '📁')
+      : fileIcon(item.ext);
+    div.innerHTML = `<span class="ti-icon">${icon}</span><span class="ti-name" title="${esc(item.path)}">${esc(item.name)}</span>`;
+
+    if (item.is_dir) {
+      div.onclick = async () => {
+        if (_treeExpanded[item.path]) {
+          _treeExpanded[item.path] = false;
+        } else {
+          _treeExpanded[item.path] = true;
+          if (!_treeCache[item.path]) await _loadDir(item.path);
+        }
+        _renderTree();
+      };
+    } else {
+      div.onclick = () => _openFile(item.path, item.ext);
+    }
+
+    container.appendChild(div);
+    if (item.is_dir && _treeExpanded[item.path]) {
+      _renderLevel(item.path, depth + 1, container);
+    }
+  });
+}
+
+// ─── Open / Save ──────────────────────────────────────────
+async function _openFile(path, ext, rootIdx = 0) {
+  if (editorDirty && !confirm('有未保存的更改，确定要离开当前文件吗？')) return;
+
+  const res = await fetch(`/api/fs/read?path=${encodeURIComponent(path)}&root=${rootIdx}`)
+    .then(r => r.json()).catch(() => null);
+  if (!res || res.error) { alert(res?.error || '读取文件失败'); return; }
+
+  currentFile = { path, ext, rootIdx };
+  editorDirty = false;
+  document.getElementById('editorFilePath').textContent = rootIdx > 0 ? `[外部] ${path}` : path;
+  document.getElementById('editorDirtyDot').classList.remove('on');
+  document.getElementById('editorSaveBtn').disabled = true;
+  document.getElementById('editorPlaceholder').style.display = 'none';
+
+  const isMd = ext === '.md';
+  document.getElementById('mdPreviewBtn').style.display = isMd ? '' : 'none';
+
+  if (!monacoReady) {
+    // Monaco still loading — show read-only fallback, queue for later
+    _pendingFile = { path, ext, rootIdx };
+    const fb = document.getElementById('editorFallback');
+    fb.value = res.content;
+    fb.style.display = 'flex';
+    document.getElementById('monacoContainer').style.display = 'none';
+    document.getElementById('mdPreviewPane').classList.remove('on');
+    document.getElementById('mdPreviewBtn').textContent = '👁 预览';
+    _renderTree();
+    return;
+  }
+
+  // Monaco ready
+  _pendingFile = null;
+  document.getElementById('editorFallback').style.display = 'none';
+  document.getElementById('monacoContainer').style.display = 'flex';
+
+  const lang = EXT_LANG[ext] || 'plaintext';
+  const model = monacoEditor.getModel();
+  if (model) monaco.editor.setModelLanguage(model, lang);
+  monacoEditor.setValue(res.content);
+  // setValue fires onDidChangeModelContent; reset dirty state after
+  editorDirty = false;
+  document.getElementById('editorDirtyDot').classList.remove('on');
+  document.getElementById('editorSaveBtn').disabled = true;
+
+  const pane = document.getElementById('mdPreviewPane');
+  if (isMd) {
+    pane.classList.add('on');
+    document.getElementById('mdPreviewBtn').textContent = '✏ 编辑';
+  } else {
+    pane.classList.remove('on');
+    document.getElementById('mdPreviewBtn').textContent = '👁 预览';
+  }
+
+  _renderTree();
+  _refreshMdPreview();
+}
+
+async function saveCurrentFile() {
+  if (!currentFile || !monacoReady) return;
+  const content = monacoEditor.getValue();
+  const res = await fetch('/api/fs/write', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: currentFile.path, content, root: currentFile.rootIdx || 0 }),
+  }).then(r => r.json()).catch(() => null);
+
+  if (!res || res.error) { alert(res?.error || '保存失败'); return; }
+  editorDirty = false;
+  document.getElementById('editorDirtyDot').classList.remove('on');
+  document.getElementById('editorSaveBtn').disabled = true;
+}
+
+// ─── Markdown preview ────────────────────────────────────
+function toggleMdPreview() {
+  const pane = document.getElementById('mdPreviewPane');
+  const btn  = document.getElementById('mdPreviewBtn');
+  if (pane.classList.contains('on')) {
+    pane.classList.remove('on');
+    btn.textContent = '👁 预览';
+  } else {
+    pane.classList.add('on');
+    btn.textContent = '✏ 编辑';
+    _refreshMdPreview();
+  }
+}
+
+function _refreshMdPreview() {
+  const pane = document.getElementById('mdPreviewPane');
+  if (!pane.classList.contains('on') || !monacoEditor) return;
+  const content = monacoEditor.getValue();
+  if (typeof marked !== 'undefined') {
+    pane.innerHTML = marked.parse(content);
+  } else {
+    pane.innerHTML = `<pre style="white-space:pre-wrap;font-size:12px">${esc(content)}</pre>`;
+  }
+}
+</script>
+</body>
+</html>
