@@ -2,7 +2,7 @@
 学术论文爬取与摘要工具
 支持来源：arxiv (cs.DB / cs.DC / cs.NI / cs.CR / cs.PL)、papers.cool
          DB顶会：VLDB / SIGMOD / ICDE
-         分布式顶会：OSDI / SOSP / NSDI / USENIX ATC / EuroSys
+         分布式/网络顶会：OSDI / SOSP / NSDI / SIGCOMM / USENIX ATC / EuroSys
          Web3安全：IEEE S&P / ACM CCS / FC（via DBLP API）
 
 依赖：pip install requests beautifulsoup4 anthropic
@@ -37,51 +37,67 @@ ARXIV_CATEGORIES = [
     "cs.NI",   # 网络与互联网架构
     "cs.CR",   # 密码学与安全（含 Web3 安全）
     "cs.PL",   # 编程语言（含智能合约分析）
-    "cs.SE",   # 软件工程
+]
+OPTIONAL_ARXIV_CATEGORIES = [
+    "cs.SE",   # 可选：仅在 --include-se 时纳入，用于智能合约工具链/工程实践交叉主题
 ]
 
 PAPERSCOOL_CATEGORIES = [
-    "cs.DB", "cs.DC", "cs.NI", "cs.CR",
+    "cs.DB", "cs.DC", "cs.NI", "cs.CR", "cs.PL",
 ]
 
-# 会议配置（DB顶会 + 分布式系统顶会 + Web3安全顶会），通过 DBLP TOC API 爬取
+# 会议配置（DB顶会 + 分布式系统/网络顶会 + Web3安全顶会），通过 DBLP TOC API 爬取
 CONF_BASES = [
     # ── 数据库顶会 ──
-    {"name": "VLDB",      "dblp_prefix": "conf/vldb/vldb",     "source_prefix": "db:vldb",     "abstract_url_tpl": None},
-    {"name": "SIGMOD",    "dblp_prefix": "conf/sigmod/sigmod",  "source_prefix": "db:sigmod",   "abstract_url_tpl": None},
+    # VLDB 论文发表于 PVLDB 期刊，DBLP 用 journals/pvldb/pvldb{vol} 索引
+    # vol 17 = 2023-24, vol 18 = 2024-25；年份探测会失败（卷号非年份），回退到兜底卷号
+    {"name": "VLDB",      "dblp_prefix": "journals/pvldb/pvldb", "source_prefix": "db:vldb",    "abstract_url_tpl": None},
+    # SIGMOD 论文发表于 PACMMOD 期刊，DBLP 用 journals/pacmmod/pacmmod{vol}
+    # vol 1 = 2023, vol 2 = 2024, vol 3 = 2025
+    {"name": "SIGMOD",    "dblp_prefix": "journals/pacmmod/pacmmod", "source_prefix": "db:sigmod", "abstract_url_tpl": None},
     {"name": "ICDE",      "dblp_prefix": "conf/icde/icde",      "source_prefix": "db:icde",     "abstract_url_tpl": None},
     # ── 分布式系统顶会 ──
     {"name": "OSDI",      "dblp_prefix": "conf/osdi/osdi",      "source_prefix": "dist:osdi",   "abstract_url_tpl": "https://www.usenix.org/conference/osdi{year2}/technical-sessions"},
     {"name": "SOSP",      "dblp_prefix": "conf/sosp/sosp",      "source_prefix": "dist:sosp",   "abstract_url_tpl": None},
     {"name": "NSDI",      "dblp_prefix": "conf/nsdi/nsdi",      "source_prefix": "dist:nsdi",   "abstract_url_tpl": "https://www.usenix.org/conference/nsdi{year2}/technical-sessions"},
+    {"name": "SIGCOMM",   "dblp_prefix": "conf/sigcomm/sigcomm","source_prefix": "net:sigcomm", "abstract_url_tpl": None},
     {"name": "USENIX ATC","dblp_prefix": "conf/usenix/usenix",  "source_prefix": "dist:atc",    "abstract_url_tpl": "https://www.usenix.org/conference/atc{year2}/technical-sessions"},
     {"name": "EuroSys",   "dblp_prefix": "conf/eurosys/eurosys","source_prefix": "dist:eurosys","abstract_url_tpl": None},
     # ── Web3 / 安全顶会 ──
     {"name": "IEEE S&P",  "dblp_prefix": "conf/sp/sp",          "source_prefix": "sec:sp",      "abstract_url_tpl": None},
     {"name": "ACM CCS",   "dblp_prefix": "conf/ccs/ccs",        "source_prefix": "sec:ccs",     "abstract_url_tpl": None},
-    {"name": "Financial Cryptography", "dblp_prefix": "conf/fc/fc", "source_prefix": "web3:fc", "abstract_url_tpl": None},
+    # FC 每年分多卷，key 格式为 conf/fc/fc{year}-1；年份探测回退到兜底后 _resolve_conf 加 "-1" 后缀
+    {"name": "Financial Cryptography", "dblp_prefix": "conf/fc/fc", "source_prefix": "web3:fc", "abstract_url_tpl": None, "dblp_suffix": "-1"},
 ]
 
 # 数据库 / 分布式 / Web3 / 网络 相关关键词（匹配标题或摘要，不区分大小写）
 DOMAIN_KEYWORDS = [
     # 数据库
-    "database", "SQL", "query optimization", "query processing", "transaction",
+    "database", "data management", "SQL", "query optimization", "query processing", "transaction",
     "ACID", "NoSQL", "key-value", "relational", "index", "B-tree", "LSM-tree",
     "storage engine", "OLAP", "OLTP", "data warehouse", "columnar",
     "distributed database", "NewSQL", "HTAP", "time series", "graph database",
     "data model", "query language", "query compiler", "data lakehouse",
+    "stream processing", "data stream", "vector database", "data provenance",
+    "materialized view", "cardinality estimation", "data cleaning", "data integration",
     # 分布式系统
     "distributed", "consensus", "Raft", "Paxos", "fault tolerance", "replication",
     "consistency", "availability", "partition tolerance", "CAP", "CRDT",
     "sharding", "load balancing", "microservices", "serverless", "cloud native",
-    "Byzantine", "distributed ledger", "distributed storage", "cluster",
+    "Byzantine", "BFT", "state machine replication", "distributed ledger",
+    "distributed storage", "geo-distributed", "cluster", "Kubernetes",
+    "service mesh", "edge computing", "datacenter", "RDMA",
     # Web3 / 区块链
     "blockchain", "smart contract", "Ethereum", "DeFi", "decentralized",
     "cryptocurrency", "NFT", "Web3", "DAO", "zero-knowledge", "ZK proof",
     "MEV", "layer 2", "rollup", "oracle", "flash loan", "Solidity",
     "EVM", "on-chain", "off-chain", "cross-chain", "interoperability",
+    "maximal extractable value", "front-running", "mempool", "DEX",
+    "automated market maker", "AMM", "liquidation", "bridge", "wallet",
+    "account abstraction", "zkSNARK", "validity proof",
     # 网络
     "network protocol", "P2P", "peer-to-peer", "gossip protocol",
+    "congestion control", "routing", "traffic engineering", "network measurement",
 ]
 
 DBLP_PUBL_API = "https://dblp.org/search/publ/api"
@@ -111,9 +127,21 @@ class Paper:
 
 # ── HTTP 会话（支持代理）─────────────────────────────────────────────────────
 
+DBLP_HEADERS = {**HEADERS, "Connection": "close"}
+
+
 def make_session(proxy: str = "") -> requests.Session:
     s = requests.Session()
     s.headers.update(HEADERS)
+    if proxy:
+        s.proxies = {"http": proxy, "https": proxy}
+    return s
+
+
+def make_dblp_session(proxy: str = "") -> requests.Session:
+    """每次 DBLP 请求用独立 session，避免 keep-alive 被服务端强制断开。"""
+    s = requests.Session()
+    s.headers.update(DBLP_HEADERS)
     if proxy:
         s.proxies = {"http": proxy, "https": proxy}
     return s
@@ -137,7 +165,8 @@ def fetch_arxiv(category: str, max_results: int, session: requests.Session) -> l
         except Exception as e:
             if attempt == 2:
                 raise
-            wait = 15 * (attempt + 1)
+            # 429 限流等更长时间
+            wait = 60 if "429" in str(e) else 20 * (attempt + 1)
             print(f"    重试 {attempt + 1}/3（等待 {wait}s）: {e}")
             time.sleep(wait)
 
@@ -245,11 +274,12 @@ def fetch_conf(conf: dict, max_results: int, session: requests.Session) -> list:
 
 
 def _fetch_dblp_toc(conf: dict, max_results: int, session: requests.Session) -> list:
-    """调用 DBLP TOC API，返回 Paper 列表（无摘要）。"""
+    """调用 DBLP TOC API，返回 Paper 列表（无摘要）。每次用独立 session 避免 keep-alive 断连。"""
     name = conf["name"]
     dblp_key = conf["dblp_key"]
     source = conf["source"]
     year = conf["year"]
+    proxy = session.proxies.get("https", "") if session.proxies else ""
 
     # DBLP TOC 查询：toc:db/<key>.bht:
     params = {
@@ -260,14 +290,16 @@ def _fetch_dblp_toc(conf: dict, max_results: int, session: requests.Session) -> 
     }
     for attempt in range(3):
         try:
-            resp = session.get(DBLP_PUBL_API, params=params, timeout=30)
+            ds = make_dblp_session(proxy)
+            resp = ds.get(DBLP_PUBL_API, params=params, timeout=30)
+            ds.close()
             resp.raise_for_status()
             break
         except Exception as e:
             if attempt == 2:
                 print(f"  {name} DBLP 失败：{e}")
                 return []
-            wait = 10 * (attempt + 1)
+            wait = 20 * (attempt + 1)
             print(f"    重试 {attempt + 1}/3（等待 {wait}s）: {e}")
             time.sleep(wait)
 
@@ -543,13 +575,18 @@ def _save_conf_state(state: dict, output_dir: str) -> None:
 
 def _dblp_latest_year(dblp_prefix: str, session: requests.Session,
                       years_back: int = 2) -> int | None:
-    """探测 DBLP 上该前缀最新有论文的年份（向前探测 years_back 年，含重试）"""
+    """探测 DBLP 上该前缀最新有论文的年份（向前探测 years_back 年，含重试）。
+    每次用独立 session + Connection:close，避免 keep-alive 被服务端断开。
+    """
+    proxy = session.proxies.get("https", "") if session.proxies else ""
     cur = datetime.now().year
     for year in range(cur, cur - years_back - 1, -1):
         params = {"q": f"toc:db/{dblp_prefix}{year}.bht:", "format": "json", "h": "1"}
         for attempt in range(3):
             try:
-                r = session.get(DBLP_PUBL_API, params=params, timeout=20)
+                ds = make_dblp_session(proxy)
+                r = ds.get(DBLP_PUBL_API, params=params, timeout=20)
+                ds.close()
                 r.raise_for_status()
                 total = int(r.json().get("result", {}).get("hits", {}).get("@total", "0"))
                 if total > 0:
@@ -557,47 +594,56 @@ def _dblp_latest_year(dblp_prefix: str, session: requests.Session,
                 break  # 请求成功但无结果，不必重试
             except Exception:
                 if attempt < 2:
-                    time.sleep(8 * (attempt + 1))
-        time.sleep(2)
+                    time.sleep(15 * (attempt + 1))
+        time.sleep(8)
     return None
 
 
-# DBLP 不可用时的兜底年份（每年年初手动更新一次，或等 DBLP 恢复后自动探测）
+# DBLP 不可用时的兜底年份/卷号（每年年初手动更新一次，或等 DBLP 恢复后自动探测）
+# 期刊型会议（VLDB=pvldb卷号，SIGMOD=pacmmod卷号）使用卷号而非年份
 _CONF_FALLBACK_YEARS: dict[str, int] = {
-    "conf/vldb/vldb":      2024,
-    "conf/sigmod/sigmod":  2025,
-    "conf/icde/icde":      2025,
-    "conf/osdi/osdi":      2024,
-    "conf/sosp/sosp":      2023,
-    "conf/nsdi/nsdi":      2025,
-    "conf/usenix/usenix":  2024,
-    "conf/eurosys/eurosys": 2025,
-    "conf/sp/sp":          2025,
-    "conf/ccs/ccs":        2024,
-    "conf/fc/fc":          2025,
+    "journals/pvldb/pvldb":    18,   # VLDB: pvldb18 = 2024-25 内容
+    "journals/pacmmod/pacmmod": 3,   # SIGMOD: pacmmod3 = 2025 内容
+    "conf/icde/icde":          2025,
+    "conf/osdi/osdi":          2025,
+    "conf/sosp/sosp":          2025,
+    "conf/nsdi/nsdi":          2026,
+    "conf/sigcomm/sigcomm":    2025,
+    "conf/usenix/usenix":      2025,
+    "conf/eurosys/eurosys":    2026,
+    "conf/sp/sp":              2025,
+    "conf/ccs/ccs":            2025,
+    "conf/fc/fc":              2025,
 }
 
 
 def _resolve_conf(base: dict, session: requests.Session) -> dict | None:
-    """将 CONF_BASES 条目解析为含具体年份的完整配置，找不到则返回 None"""
-    year = _dblp_latest_year(base["dblp_prefix"], session)
-    if year is None:
-        year = _CONF_FALLBACK_YEARS.get(base["dblp_prefix"])
-        if year is None:
+    """将 CONF_BASES 条目解析为含具体年份/卷号的完整配置，找不到则返回 None。
+    支持 dblp_suffix 字段（如 FC 的 "-1" 多卷后缀）和期刊型前缀（VLDB/SIGMOD）。
+    """
+    id_key = _dblp_latest_year(base["dblp_prefix"], session)
+    if id_key is None:
+        id_key = _CONF_FALLBACK_YEARS.get(base["dblp_prefix"])
+        if id_key is None:
             return None
-        print(f"    {base['name']}: DBLP 探测超时，使用兜底年份 {year}")
-    year2 = str(year)[2:]
+        print(f"    {base['name']}: DBLP 探测超时，使用兜底 {id_key}")
+    suffix = base.get("dblp_suffix", "")
+    dblp_key = f"{base['dblp_prefix']}{id_key}{suffix}"
+    # 期刊型会议（卷号 < 100）显示为 "vol.N"，会议型显示为年份
+    display_id = f"vol.{id_key}" if int(str(id_key).split("-")[0]) < 100 else str(id_key)
+    year_str = str(id_key)
+    year2 = year_str[2:] if len(year_str) >= 4 else year_str
     ab_tpl = base.get("abstract_url_tpl")
     abstract_url = (
-        ab_tpl.replace("{year}", str(year)).replace("{year2}", year2)
+        ab_tpl.replace("{year}", year_str).replace("{year2}", year2)
         if ab_tpl else None
     )
     return {
-        "name":         f"{base['name']} {year}",
-        "dblp_key":     f"{base['dblp_prefix']}{year}",
+        "name":         f"{base['name']} {display_id}",
+        "dblp_key":     dblp_key,
         "abstract_url": abstract_url,
-        "source":       f"{base['source_prefix']}{year}",
-        "year":         str(year),
+        "source":       f"{base['source_prefix']}{id_key}",
+        "year":         year_str,
     }
 
 
@@ -613,9 +659,11 @@ def main():
     parser.add_argument("--no-arxiv", action="store_true", help="跳过 arxiv")
     parser.add_argument("--no-paperscool", action="store_true", help="跳过 papers.cool")
     parser.add_argument("--no-confs", action="store_true",
-                        help="跳过 DB/分布式/Web3 顶会（VLDB / SIGMOD / ICDE / OSDI / SOSP / NSDI / ATC / EuroSys / IEEE S&P / ACM CCS / FC）")
+                        help="跳过 DB/分布式/Web3 顶会（VLDB / SIGMOD / ICDE / OSDI / SOSP / NSDI / SIGCOMM / ATC / EuroSys / IEEE S&P / ACM CCS / FC）")
     parser.add_argument("--force-confs", action="store_true",
                         help="强制重新爬取已爬过的会议（忽略状态文件）")
+    parser.add_argument("--include-se", action="store_true",
+                        help="额外纳入 arxiv/papers.cool 的 cs.SE（仅用于智能合约工程实践等交叉主题）")
     parser.add_argument("--proxy", default="", help="HTTP 代理，如 http://127.0.0.1:7890")
     parser.add_argument("--claude-key", default="", help="Claude API Key（生成中文摘要）")
     parser.add_argument("--output", default="output/papers", help="输出目录")
@@ -642,7 +690,10 @@ def main():
 
     if not args.no_arxiv:
         print("=== arxiv ===")
-        for cat in ARXIV_CATEGORIES:
+        arxiv_categories = list(ARXIV_CATEGORIES)
+        if args.include_se:
+            arxiv_categories.extend(OPTIONAL_ARXIV_CATEGORIES)
+        for cat in arxiv_categories:
             try:
                 all_papers += fetch_arxiv(cat, args.max, session)
                 time.sleep(10)
@@ -651,7 +702,10 @@ def main():
 
     if not args.no_paperscool:
         print("\n=== papers.cool ===")
-        for cat in PAPERSCOOL_CATEGORIES:
+        paperscool_categories = list(PAPERSCOOL_CATEGORIES)
+        if args.include_se:
+            paperscool_categories.extend(OPTIONAL_ARXIV_CATEGORIES)
+        for cat in paperscool_categories:
             try:
                 all_papers += fetch_paperscool(cat, args.max, session)
                 time.sleep(2)
@@ -672,9 +726,10 @@ def main():
                 all_papers += papers
                 if papers:
                     conf_state[conf["source"]] = today
-                time.sleep(3)
+                time.sleep(12)
             except Exception as e:
                 print(f"  {conf['name']} 失败：{e}")
+                time.sleep(12)
 
     _save_conf_state(conf_state, args.output)
 

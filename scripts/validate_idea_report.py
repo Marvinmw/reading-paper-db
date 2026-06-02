@@ -22,6 +22,14 @@ CFORM   = {'new_problem','new_solution','better_solution'}
 FALLACY = {'confirmation_bias','hasty_generalization','cherry_picking',
            'survivorship_bias','ecological_fallacy','none'}
 PRISK   = {'high','medium','low'}
+DOMAIN_TAGS = {
+    'database',
+    'distributed_systems',
+    'web3',
+    'network',
+    'security',
+    'programming_languages',
+}
 
 NUM_PAT = re.compile(r'\d+\s*%|\d+\s*pp|[≥≤><]=?\s*\d|=\s*\d+\.\d|r\s*[<>≤≥]=?\s*\d')
 JARGON  = ['范式失效','系统性失效','SOTA','paradigm-level','separation 范式',
@@ -42,6 +50,18 @@ def check_idea(item, label):
     # 2. strategy enum
     if item.get('strategy') not in STRATEGY:
         p(f'bad strategy: {item.get("strategy")}')
+
+    # Domain relevance schema (new DB/Web3/distributed project schema)
+    tags = item.get('domain_tags', [])
+    if not tags and not item.get('is_se_related'):
+        p('missing domain_tags')
+    if tags:
+        if not isinstance(tags, list):
+            p('domain_tags must be a list')
+        else:
+            bad_tags = [t for t in tags if t not in DOMAIN_TAGS]
+            if bad_tags:
+                p(f'bad domain_tags: {bad_tags}')
 
     # 3. idea: 3 enums + one_liner + approach
     idea = item.get('idea', {})
@@ -174,10 +194,15 @@ def check_report(rep):
     if not has_phenomenon_or_hidden:
         fails.append('REPORT: no phenomenon_discovery or hidden_failure_mode (need ≥ 1)')
 
-    # SE relevance ≥ 50%
-    se_count = sum(1 for i in ideas if i.get('is_se_related'))
-    if se_count / n < 0.5:
-        fails.append(f'REPORT: SE-related {se_count}/{n} = {100*se_count/n:.0f}% < 50%')
+    # Domain relevance ≥ 70%. Legacy reports can still use is_se_related as fallback.
+    domain_count = sum(
+        1 for i in ideas
+        if i.get('is_domain_relevant') or i.get('is_se_related') or i.get('domain_tags')
+    )
+    if domain_count / n < 0.70:
+        fails.append(
+            f'REPORT: domain-relevant {domain_count}/{n} = {100*domain_count/n:.0f}% < 70%'
+        )
 
     # C1: better_solution ≤ 30%
     bs_pct = cform.get('better_solution', 0) / n

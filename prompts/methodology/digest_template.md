@@ -25,7 +25,7 @@ description: /full-cycle 末尾生成的人类可读 daily/weekly digest markdow
 
 ## 0. TL;DR
 
-{2-3 sentence highest-level take-away for the day. e.g. "今日 PI×Code 子空间继续饱和，2 个 truly new_problem 通过质量门；建议 follow #3 与 #7。"}
+{2-3 sentence highest-level take-away for the day. e.g. "今日 DeFi oracle 与分布式一致性都有明显信号，2 个 truly new_problem 通过质量门；建议 follow #3 与 #7。"}
 
 ---
 

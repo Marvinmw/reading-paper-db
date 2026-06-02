@@ -58,7 +58,7 @@ Step 5  digest_template         ← 把 1-5 产出拼成人类可读 markdown di
 
 ### Prompt-as-Program（始终生效）
 
-**任何需要 LLM 分析的任务，Claude/Codex 自己作为执行引擎完成，不调用外部 LLM API。**
+**任何需要 LLM 分析的任务，Codex 自己作为执行引擎完成，不调用外部 LLM API。**
 
 具体规则见 `prompts/commands/prompt-as-program.md`。
 

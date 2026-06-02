@@ -160,7 +160,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .tp-meta{font-size:11px;color:#8b949e;margin-top:2px}
 .tp-reason{font-size:11px;color:#555;margin-top:4px;font-style:italic;line-height:1.5}
 
-/* Landscape map (PI×Code subscenarios) */
+/* Landscape map (topic subscenarios) */
 .landscape-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
 .ls-card{background:#fff;border-radius:10px;border:1.5px solid #e2e8f0;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
 .ls-header{display:flex;align-items:center;gap:6px}
@@ -357,7 +357,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 /* opp expanded fields */
 .opp-meta-row{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
 
-/* SE Spotlight */
+/* Domain Spotlight */
 .se-spotlight{background:linear-gradient(135deg,#0f172a,#1e3a5f);border-radius:12px;
   padding:16px 20px;color:#e0f2fe;box-shadow:0 4px 14px rgba(15,23,42,.3)}
 .se-spotlight-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -566,10 +566,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
           <div style="font-size:15px;font-weight:700;color:#0d1117;margin-bottom:10px">
             生成今日调研报告
           </div>
-          <p>在右侧终端中运行：</p>
-          <p style="margin-top:8px"><code>python generate_report.py --claude-key YOUR_KEY</code></p>
+          <p>在 Codex 对话中执行：</p>
+          <p style="margin-top:8px"><code>/full-cycle</code> 或 <code>生成 daily report</code></p>
           <p style="margin-top:12px;color:#8b949e;font-size:12px">
-            约 30~60 秒生成完成，点击「↺ 刷新列表」即可查看
+            报告保存到 output/reports 后，点击「↺ 刷新列表」即可查看
           </p>
         </div>
         <div id="reportMain" style="display:none;display:flex;flex-direction:column;gap:18px"></div>
@@ -644,9 +644,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <button class="term-add-btn" onclick="newTerminal()" title="新建终端">＋</button>
     </div>
     <div class="term-header">
-      <button class="term-btn primary" onclick="sendCmd('python paper_scraper.py --llm-only --max 50\n')">▶ 爬取论文</button>
-      <button class="term-btn green"   onclick="sendCmd('python generate_report.py --claude-key ' + getApiKey() + '\n')">📊 生成报告</button>
-      <button class="term-btn"         onclick="sendCmd('ls output/\n')">查看输出</button>
+      <button class="term-btn primary" onclick="sendCmd('python paper_scraper.py --max 50 --domain-only\n')">▶ 爬取论文</button>
+      <button class="term-btn green"   onclick="sendCmd('sed -n \\'1,120p\\' prompts/commands/daily_report.md\n')">📋 报告 Prompt</button>
+      <button class="term-btn"         onclick="sendCmd('ls output/papers output/reports\n')">查看输出</button>
       <button class="term-btn"         onclick="termClear()" title="清屏并重置终端">⌫ 清屏</button>
     </div>
     <div class="term-bodies" id="termBodies"></div>
@@ -736,7 +736,15 @@ async function loadPapers(filename) {
 // ═══════════════════════════════════════════════════════
 //  Papers: source chips
 // ═══════════════════════════════════════════════════════
-const SRC_COLORS = {arxiv:'#1565C0',acl:'#2E7D32',openreview:'#6A1B9A',paperscool:'#E65100'};
+const SRC_COLORS = {
+  arxiv:'#1565C0',
+  paperscool:'#E65100',
+  db:'#0f766e',
+  dist:'#7c3aed',
+  net:'#0284c7',
+  sec:'#b91c1c',
+  web3:'#d97706'
+};
 function srcColor(s) { return SRC_COLORS[s.split(':')[0]] || '#555'; }
 
 function buildChips() {
@@ -922,13 +930,13 @@ function renderReport(r) {
   const opps      = r.research_opportunities||[];
   const sparks    = r.idea_sparks||[];
   const allIdeas  = ideasNew || [...opps, ...sparks];
-  const se        = r.se_spotlight||null;
+  const domain    = r.domain_spotlight || r.db_spotlight || r.se_spotlight || null;
   const landscape = r.landscape||[];
 
   main.innerHTML = `
     ${statsRow(r, themes, opps, sparks, allIdeas)}
     ${execCard(r.executive_summary||'')}
-    ${se ? seSpotlightCard(se) : ''}
+    ${domain ? domainSpotlightCard(domain) : ''}
     ${landscape.length ? `<div>
       <div class="section-title">🗺️ 子场景格局图</div>
       <div class="landscape-grid">${landscape.map(ls=>landscapeCard(ls)).join('')}</div>
@@ -973,27 +981,44 @@ function landscapeCard(ls) {
   </div>`;
 }
 
-function seSpotlightCard(se) {
-  const subs = (se.subtopics||[]).map(s => {
+function domainSpotlightCard(domain) {
+  const subs = (domain.subtopics||[]).map(s => {
     const pps = (s.papers||[]).map(p =>
       `<a class="se-tp-link" href="${esc(p.url)}" target="_blank" rel="noopener"
         title="${esc(p.title)}">▸ ${esc(p.title.slice(0,48))}${p.title.length>48?'…':''}</a>`
     ).join('');
+    const domainTag = s.domain ? `<span class="se-sub-count">${esc(domainLabel(s.domain))}</span>` : '';
     return `<div class="se-sub">
-      <div class="se-sub-name">${esc(s.name)}<span class="se-sub-count">${s.paper_count||0}篇</span></div>
+      <div class="se-sub-name">${esc(s.name)}${domainTag}<span class="se-sub-count">${s.paper_count||0}篇</span></div>
       <div class="se-sub-hi">${esc(s.highlights||'')}</div>
       ${pps?`<div class="se-sub-papers">${pps}</div>`:''}
     </div>`;
   }).join('');
   return `<div class="se-spotlight">
     <div class="se-spotlight-header">
-      <span style="font-size:18px">🛠️</span>
-      <span style="font-size:14px;font-weight:700;color:#7dd3fc">软件工程专项</span>
-      <span class="se-badge">SE Spotlight</span>
+      <span style="font-size:18px">🧭</span>
+      <span style="font-size:14px;font-weight:700;color:#7dd3fc">领域专题</span>
+      <span class="se-badge">Domain Spotlight</span>
     </div>
-    <div class="se-summary">${esc(se.summary||'')}</div>
+    <div class="se-summary">${esc(domain.summary||'')}</div>
     ${subs?`<div class="se-subtopics">${subs}</div>`:''}
   </div>`;
+}
+
+const DOMAIN_LABEL = {
+  database:'DB',
+  distributed_systems:'Distributed',
+  web3:'Web3',
+  network:'Network',
+  security:'Security',
+  programming_languages:'PL',
+  SE:'SE'
+};
+function domainLabel(tag) { return DOMAIN_LABEL[tag] || tag; }
+function domainBadges(o) {
+  let tags = Array.isArray(o.domain_tags) ? o.domain_tags.slice(0,3) : [];
+  if (!tags.length && (o.is_se_related || o.is_se_relevant)) tags = ['SE'];
+  return tags.map(t => `<span class="se-badge-tag">${esc(domainLabel(t))}</span>`).join('');
 }
 
 function statsRow(r, themes, opps, sparks, allIdeas) {
@@ -1087,7 +1112,7 @@ function oppCard(o, i) {
       <span class="opp-icon">💡</span>
       <span class="opp-title">${esc(o.title||o.area||'')}</span>
       <div class="opp-badges">
-        ${(o.is_se_related||o.is_se_relevant)?'<span class="se-badge-tag">SE</span>':''}
+        ${domainBadges(o)}
         <span class="badge-pill ${diffClass}">${diffText}</span>
         <span class="badge-pill ${novClass}">${novText}</span>
       </div>
@@ -1416,7 +1441,7 @@ function ideaCard(idea) {
     <div class="idea-header">
       <div class="idea-title">${esc(idea.title)}</div>
       <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
-        ${(idea.is_se_related||idea.is_se_relevant)?'<span class="se-badge-tag">SE</span>':''}
+        ${domainBadges(idea)}
         <span class="idea-feas-tag ${tagClass}">${tagText}</span>
       </div>
     </div>

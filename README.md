@@ -77,7 +77,7 @@ python web_app.py
 
 | 来源 | 说明 |
 |------|------|
-| arxiv | cs.DB / cs.DC / cs.NI / cs.CR / cs.PL / cs.SE |
+| arxiv | 默认 cs.DB / cs.DC / cs.NI / cs.CR / cs.PL；`--include-se` 时额外纳入 cs.SE |
 | papers.cool | 同 arxiv 分类，当日热门 |
 | VLDB | 数据库顶会（via DBLP）|
 | SIGMOD | 数据库顶会（via DBLP）|
@@ -85,6 +85,7 @@ python web_app.py
 | OSDI | 操作系统与分布式系统（via DBLP + USENIX 摘要）|
 | SOSP | 系统顶会（via DBLP）|
 | NSDI | 网络与分布式（via DBLP + USENIX 摘要）|
+| SIGCOMM | 网络系统顶会（via DBLP）|
 | USENIX ATC | 系统年度技术会议（via DBLP + USENIX 摘要）|
 | EuroSys | 欧洲系统顶会（via DBLP）|
 | IEEE S&P | 安全顶会（Web3/区块链安全）（via DBLP）|
@@ -105,6 +106,7 @@ python web_app.py
 --no-paperscool  跳过 papers.cool
 --no-confs       跳过所有顶会（VLDB/SIGMOD/OSDI 等）
 --force-confs    强制重新爬取已爬过的会议
+--include-se     额外纳入 cs.SE（仅用于智能合约工程实践等交叉主题）
 ```
 
 常用示例：

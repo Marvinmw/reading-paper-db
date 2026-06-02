@@ -9,14 +9,14 @@ set -euo pipefail
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON="/Users/weima/opt/anaconda3/bin/python"
-OUTPUT_DIR="$SCRIPT_DIR/output"
+OUTPUT_DIR="$SCRIPT_DIR/output/papers"
 LOG_DIR="$SCRIPT_DIR/logs"
 
 # 如需 Claude 中文摘要，填入 API Key（留空则跳过）
 CLAUDE_API_KEY=""
 
-# 命令行参数，默认：大模型相关 + 每个来源最多 50 篇
-ARGS="${*:---llm-only --max 50}"
+# 命令行参数，默认：DB/Web3/分布式领域过滤 + 每个来源最多 50 篇
+ARGS="${*:---max 50 --domain-only}"
 if [[ -n "$CLAUDE_API_KEY" ]]; then
     ARGS="$ARGS --claude-key $CLAUDE_API_KEY"
 fi

@@ -82,11 +82,11 @@ def list_reports():
         if stem.startswith("report_pi_code_") and len(parts) >= 4:
             d = parts[3]
             t = parts[4] if len(parts) >= 5 else None
-            label = f"💉×Code {_fmt_dt(d, t)}"
+            label = f"旧 PI×Code {_fmt_dt(d, t)}"
         elif stem.startswith("report_sec_se_") and len(parts) >= 4:
             d = parts[3]
             t = parts[4] if len(parts) >= 5 else None
-            label = f"🔒×SE {_fmt_dt(d, t)}"
+            label = f"旧 安全×SE {_fmt_dt(d, t)}"
         elif stem.startswith("report_sec_") and len(parts) >= 3:
             d = parts[2]
             t = parts[3] if len(parts) >= 4 else None
